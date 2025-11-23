@@ -1,0 +1,6 @@
+fastapi
+uvicorn
+pyiceberg[s3fs,rest,sql,duckdb]
+datafusion
+pydantic
+python-dotenv

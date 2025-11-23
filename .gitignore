@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+.env
+env.json
+venv/
+.venv/
+node_modules/
+dist/
+.DS_Store
+backend/test_connection.py
+backend/debug_output.txt
+backend/debug_output_final.txt
