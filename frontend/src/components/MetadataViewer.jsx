@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Box, Tabs, Tab, Typography, Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Button, TextField } from '@mui/material';
+import { Box, Tabs, Tab, Typography, Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Button, TextField, Alert } from '@mui/material';
 import api from '../api';
 
 function MetadataViewer({ namespace, table }) {
@@ -80,6 +80,10 @@ function MetadataViewer({ namespace, table }) {
 
       {/* Snapshots Tab */}
       <TabPanel value={tab} index={1}>
+        <Alert severity="info" sx={{ mb: 2 }}>
+         <strong>Time Travel:</strong> Copy a Snapshot ID to query historical data. 
+          Use syntax: <code>SELECT * FROM {namespace}.{table} FOR SYSTEM_TIME AS OF SNAPSHOT &lt;ID&gt;</code>
+        </Alert>
         <TableContainer component={Paper}>
           <Table size="small">
             <TableHead>

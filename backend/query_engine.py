@@ -33,17 +33,43 @@ class QueryEngine:
         """
         Executes a SQL query. Handles CREATE TABLE manually.
         Auto-detects and registers namespace-qualified table references.
+        Supports time travel: SELECT * FROM table FOR SYSTEM_TIME AS OF SNAPSHOT <id>
         """
+        # Check for time travel syntax: FOR SYSTEM_TIME AS OF SNAPSHOT <id>
+        # or FOR SYSTEM_TIME AS OF TIMESTAMP <ms>
+        snapshot_id = None
+        as_of_timestamp = None
+        
+        time_travel_snapshot = re.search(r'FOR\s+SYSTEM_TIME\s+AS\s+OF\s+SNAPSHOT\s+(\d+)', sql, re.IGNORECASE)
+        if time_travel_snapshot:
+            snapshot_id = int(time_travel_snapshot.group(1))
+            # Remove time travel clause from SQL for DataFusion
+            sql = re.sub(r'\s+FOR\s+SYSTEM_TIME\s+AS\s+OF\s+SNAPSHOT\s+\d+', '', sql, flags=re.IGNORECASE)
+        
+        time_travel_timestamp = re.search(r'FOR\s+SYSTEM_TIME\s+AS\s+OF\s+TIMESTAMP\s+(\d+)', sql, re.IGNORECASE)
+        if time_travel_timestamp:
+            as_of_timestamp = int(time_travel_timestamp.group(1))
+            # Remove time travel clause from SQL for DataFusion
+            sql = re.sub(r'\s+FOR\s+SYSTEM_TIME\s+AS\s+OF\s+TIMESTAMP\s+\d+', '', sql, flags=re.IGNORECASE)
+        
         # Check for CREATE TABLE
         create_match = re.match(r"CREATE\s+TABLE\s+([\w\.]+)\s*\((.*)\)\s*(?:USING\s+iceberg)?", sql, re.IGNORECASE | re.DOTALL)
         if create_match:
             return self._handle_create_table(create_match)
 
-        # Extract namespace-qualified table references (e.g., "db.customers" or "level1.level2.table")
-        # Pattern: captures everything up to the last dot as namespace, and after last dot as table
-        # Matches: namespace(.namespace)*.table
-        table_pattern = r'(?:FROM|JOIN)\s+((?:[\w]+\.)+)([\w]+)\b'
+        # Extract namespace-qualified table references (e.g., "db.customers" or "level1.level2.table" or "db.customers$snapshots")
+        # Pattern: captures everything up to the last dot as namespace, and after last dot as table (with optional $metadata)
+        # Matches: namespace(.namespace)*.table($metadata)?
+        table_pattern = r'(?:FROM|JOIN)\s+((?:[\w]+\.)+)([\w$]+)\b'
         matches = re.findall(table_pattern, sql, re.IGNORECASE)
+        
+        # Extract WHERE clause and SELECT columns for optimization
+        from sql_utils import extract_where_clause, extract_select_columns, sql_where_to_iceberg_filter
+        where_clause = extract_where_clause(sql)
+        select_columns = extract_select_columns(sql)
+        
+        # Convert WHERE to PyIceberg filter
+        row_filter = sql_where_to_iceberg_filter(where_clause) if where_clause else None
         
         # Register tables and rewrite SQL to use unique aliases
         # We'll use format: namespace_table (replacing dots with underscores)
@@ -56,6 +82,12 @@ class QueryEngine:
             alias = f"{namespace.replace('.', '_')}_{table_name}"
             qualified_name = f"{namespace}.{table_name}"
             
+            # Check for metadata tables (table$suffix)
+            if '$' in table_name:
+                # Handle metadata tables separately
+                result = self._handle_metadata_table(namespace, table_name.replace('$', '.'))
+                return result
+            
             # Register table with alias if not already registered
             if alias not in self.registered_tables:
                 try:
@@ -63,11 +95,32 @@ class QueryEngine:
                     # Iceberg expects namespace as a string "level1.level2" or tuple ('level1', 'level2')
                     # Most REST catalogs accept the dotted string format
                     table = self.catalog_manager.get_table(namespace, table_name)
-                    arrow_table = table.scan().to_arrow()
+                    
+                    # Apply predicate pushdown and column projection
+                    # Start with base scan, optionally with time travel
+                    if snapshot_id:
+                        print(f"Time travel to snapshot: {snapshot_id}")
+                        scan = table.scan(snapshot_id=snapshot_id)
+                    elif as_of_timestamp:
+                        print(f"Time travel to timestamp: {as_of_timestamp}")
+                        scan = table.scan(as_of_timestamp=as_of_timestamp)
+                    else:
+                        scan = table.scan()
+                    
+                    if row_filter:
+                        print(f"Applying filter: {row_filter}")
+                        scan = scan.filter(row_filter)
+                    if select_columns:
+                        print(f"Selecting columns: {select_columns}")
+                        scan = scan.select(*select_columns)
+                    
+                    arrow_table = scan.to_arrow()
                     self.ctx.from_arrow_table(arrow_table, name=alias)
                     self.registered_tables.add(alias)
                 except Exception as e:
                     print(f"Failed to register table {qualified_name}: {e}")
+                    import traceback
+                    traceback.print_exc()
             
             # Replace qualified name with alias in SQL
             # Use word boundaries to avoid partial replacements
@@ -126,8 +179,66 @@ class QueryEngine:
         self.catalog_manager.catalog.create_table(f"{namespace}.{table_name}", schema=schema)
         return [{"status": "Table created successfully"}]
 
+    def _handle_metadata_table(self, namespace: str, table_spec: str):
+        """
+        Handle metadata table queries (table$snapshots, table$files, etc.)
+        table_spec is like "customers.snapshots"
+        """
+        parts = table_spec.split('.')
+        if len(parts) != 2:
+            raise ValueError(f"Invalid metadata table spec: {table_spec}")
+        
+        table_name, metadata_type = parts
+        table = self.catalog_manager.get_table(namespace, table_name)
+        
+        if metadata_type == 'snapshots':
+            # Return snapshot information
+            snapshots = table.snapshots()
+            return [{
+                'snapshot_id': s.snapshot_id,
+                'timestamp_ms': s.timestamp_ms,
+                'operation': s.summary.operation if s.summary else None,
+                'manifest_list': s.manifest_list
+            } for s in snapshots]
+        
+        elif metadata_type == 'files':
+            # Return data files
+            files_info = []
+            for snapshot in table.snapshots():
+                scan = table.scan(snapshot_id=snapshot.snapshot_id)
+                # Note: This is a simplified version
+                # Full implementation would inspect manifests
+                files_info.append({
+                    'snapshot_id': snapshot.snapshot_id,
+                    'file_count': 'N/A',  # Would need to count from manifests
+                    'note': 'Use table.inspect.files() for full details'
+                })
+            return files_info
+        
+        elif metadata_type == 'partitions':
+            # Return partition information
+            return [{"note": "Partition metadata not yet implemented"}]
+        
+        elif metadata_type == 'stats':
+            # Return table statistics
+            metadata = table.metadata
+            current_snapshot = table.current_snapshot()
+            return [{
+                'table': f"{namespace}.{table_name}",
+                'total_snapshots': len(table.snapshots()),
+                'current_snapshot_id': current_snapshot.snapshot_id if current_snapshot else None,
+                'total_records': current_snapshot.summary.get('total-records') if current_snapshot and current_snapshot.summary else 'N/A',
+                'total_data_files': current_snapshot.summary.get('total-data-files') if current_snapshot and current_snapshot.summary else 'N/A',
+                'total_delete_files': current_snapshot.summary.get('total-delete-files') if current_snapshot and current_snapshot.summary else 'N/A',
+                'total_size_bytes': current_snapshot.summary.get('total-files-size') if current_snapshot and current_snapshot.summary else 'N/A'
+            }]
+        
+        else:
+            raise ValueError(f"Unknown metadata type: {metadata_type}")
+
     def register_all_tables_in_namespace(self, namespace: str):
         tables = self.catalog_manager.list_tables(namespace)
         for table_ident in tables:
             t_name = table_ident[-1] 
             self._ensure_table_registered(namespace, t_name)
+
