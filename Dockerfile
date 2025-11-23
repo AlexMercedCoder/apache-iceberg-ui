@@ -28,5 +28,8 @@ COPY --from=frontend-build /app/frontend/dist ./backend/static
 # Expose Port
 EXPOSE 8000
 
+# Set Environment Variables
+ENV PYTHONPATH=/app/backend
+
 # Run Application
 CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]
