@@ -73,7 +73,12 @@ class CatalogManager:
         older_than_ms: Timestamp in milliseconds. If None, retains only the current snapshot (logic may vary).
         """
         table = self.get_table(namespace, table_name)
-        expire = table.expire_snapshots()
+        
+        # PyIceberg 0.10.0+ uses manage_snapshots()
+        if hasattr(table, "manage_snapshots"):
+            expire = table.manage_snapshots().expire_snapshots()
+        else:
+            expire = table.expire_snapshots()
         
         if older_than_ms:
             expire = expire.expire_older_than(older_than_ms)
@@ -83,3 +88,57 @@ class CatalogManager:
         # or we rely on table properties if set.
         
         expire.commit()
+
+    def add_column(self, namespace: str, table_name: str, col_name: str, col_type: str, required: bool = False):
+        table = self.get_table(namespace, table_name)
+        from pyiceberg.types import IntegerType, StringType, BooleanType, FloatType, DoubleType, LongType, DateType, TimestampType
+        
+        type_map = {
+            "int": IntegerType(),
+            "string": StringType(),
+            "boolean": BooleanType(),
+            "float": FloatType(),
+            "double": DoubleType(),
+            "long": LongType(),
+            "date": DateType(),
+            "timestamp": TimestampType()
+        }
+        
+        iceberg_type = type_map.get(col_type.lower())
+        if not iceberg_type:
+            raise ValueError(f"Unsupported type: {col_type}")
+            
+        with table.update_schema() as update:
+            update.add_column(col_name, iceberg_type, required=required)
+
+    def drop_column(self, namespace: str, table_name: str, col_name: str):
+        table = self.get_table(namespace, table_name)
+        with table.update_schema() as update:
+            update.delete_column(col_name)
+
+    def rename_column(self, namespace: str, table_name: str, col_name: str, new_name: str):
+        table = self.get_table(namespace, table_name)
+        with table.update_schema() as update:
+            update.rename_column(col_name, new_name)
+
+    def update_column_type(self, namespace: str, table_name: str, col_name: str, new_type: str):
+        table = self.get_table(namespace, table_name)
+        from pyiceberg.types import IntegerType, StringType, BooleanType, FloatType, DoubleType, LongType, DateType, TimestampType
+        
+        type_map = {
+            "int": IntegerType(),
+            "string": StringType(),
+            "boolean": BooleanType(),
+            "float": FloatType(),
+            "double": DoubleType(),
+            "long": LongType(),
+            "date": DateType(),
+            "timestamp": TimestampType()
+        }
+        
+        iceberg_type = type_map.get(new_type.lower())
+        if not iceberg_type:
+            raise ValueError(f"Unsupported type: {new_type}")
+            
+        with table.update_schema() as update:
+            update.update_column(col_name, field_type=iceberg_type)

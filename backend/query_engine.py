@@ -29,7 +29,7 @@ class QueryEngine:
             # Log error but don't crash if one table fails to load
             print(f"Failed to register table {full_name}: {e}")
 
-    def execute_query(self, sql: str):
+    def execute_query(self, sql: str, return_arrow: bool = False):
         """
         Executes a SQL query. Handles CREATE TABLE manually.
         Auto-detects and registers namespace-qualified table references.
@@ -74,6 +74,8 @@ class QueryEngine:
         # Register tables and rewrite SQL to use unique aliases
         # We'll use format: namespace_table (replacing dots with underscores)
         rewritten_sql = sql
+        involved_tables_snapshots = [] # List of (namespace, table, snapshot_id) for cache key
+
         for namespace_with_dot, table_name in matches:
             # Remove trailing dot from namespace
             namespace = namespace_with_dot.rstrip('.')
@@ -89,21 +91,25 @@ class QueryEngine:
                 return result
             
             # Register table with alias if not already registered
-            if alias not in self.registered_tables:
-                try:
-                    # For multi-level namespaces, we need to pass it to catalog correctly
-                    # Iceberg expects namespace as a string "level1.level2" or tuple ('level1', 'level2')
-                    # Most REST catalogs accept the dotted string format
-                    table = self.catalog_manager.get_table(namespace, table_name)
-                    
+            # We always need to check the table to get the snapshot ID for caching
+            try:
+                table = self.catalog_manager.get_table(namespace, table_name)
+                current_snapshot = table.current_snapshot()
+                snap_id = current_snapshot.snapshot_id if current_snapshot else 0
+                involved_tables_snapshots.append(f"{qualified_name}:{snap_id}")
+
+                if alias not in self.registered_tables:
                     # Apply predicate pushdown and column projection
                     # Start with base scan, optionally with time travel
                     if snapshot_id:
                         print(f"Time travel to snapshot: {snapshot_id}")
                         scan = table.scan(snapshot_id=snapshot_id)
+                        # For time travel, use the requested snapshot ID for cache key
+                        involved_tables_snapshots.append(f"{qualified_name}:tt_{snapshot_id}")
                     elif as_of_timestamp:
                         print(f"Time travel to timestamp: {as_of_timestamp}")
                         scan = table.scan(as_of_timestamp=as_of_timestamp)
+                        involved_tables_snapshots.append(f"{qualified_name}:tt_{as_of_timestamp}")
                     else:
                         scan = table.scan()
                     
@@ -117,10 +123,10 @@ class QueryEngine:
                     arrow_table = scan.to_arrow()
                     self.ctx.from_arrow_table(arrow_table, name=alias)
                     self.registered_tables.add(alias)
-                except Exception as e:
-                    print(f"Failed to register table {qualified_name}: {e}")
-                    import traceback
-                    traceback.print_exc()
+            except Exception as e:
+                print(f"Failed to register/inspect table {qualified_name}: {e}")
+                import traceback
+                traceback.print_exc()
             
             # Replace qualified name with alias in SQL
             # Use word boundaries to avoid partial replacements
@@ -131,9 +137,47 @@ class QueryEngine:
                 flags=re.IGNORECASE
             )
 
+        # Caching Logic
+        import hashlib
+        import os
+        import pyarrow.feather as feather
+        
+        # Create cache key
+        # Key = hash(rewritten_sql + sorted(involved_tables_snapshots))
+        # This ensures that if SQL changes OR any table's snapshot changes, key changes.
+        cache_key_str = rewritten_sql + "|" + ",".join(sorted(involved_tables_snapshots))
+        cache_hash = hashlib.md5(cache_key_str.encode('utf-8')).hexdigest()
+        cache_dir = os.path.join(os.path.dirname(__file__), "cache")
+        cache_file = os.path.join(cache_dir, f"{cache_hash}.feather")
+        
+        # Check cache
+        if os.path.exists(cache_file):
+            print(f"Cache HIT: {cache_file}")
+            try:
+                cached_table = feather.read_table(cache_file)
+                if return_arrow:
+                    return cached_table
+                return cached_table.to_pylist()
+            except Exception as e:
+                print(f"Cache read failed, re-executing: {e}")
+
+        print(f"Cache MISS: Executing query...")
         try:
             df = self.ctx.sql(rewritten_sql)
-            return df.to_arrow_table().to_pylist()
+            result_arrow = df.to_arrow_table()
+            
+            # Write to cache
+            try:
+                if not os.path.exists(cache_dir):
+                    os.makedirs(cache_dir)
+                feather.write_feather(result_arrow, cache_file)
+                print(f"Cache saved: {cache_file}")
+            except Exception as e:
+                print(f"Failed to write cache: {e}")
+            
+            if return_arrow:
+                return result_arrow
+            return result_arrow.to_pylist()
         except Exception as e:
             raise RuntimeError(f"Query execution failed: {e}")
 

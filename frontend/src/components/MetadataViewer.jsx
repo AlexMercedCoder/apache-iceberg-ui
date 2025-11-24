@@ -1,15 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { Box, Tabs, Tab, Typography, Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Button, TextField, Alert } from '@mui/material';
 import api from '../api';
+import MaintenanceControls from './MaintenanceControls';
+import SchemaEditor from './SchemaEditor';
+import MetadataCharts from './MetadataCharts';
 
 function MetadataViewer({ namespace, table }) {
   const [tab, setTab] = useState(0);
   const [metadata, setMetadata] = useState(null);
   const [loading, setLoading] = useState(false);
   
-  // Maintenance state
-  const [olderThan, setOlderThan] = useState('');
-
   useEffect(() => {
     fetchMetadata();
   }, [namespace, table]);
@@ -26,17 +26,6 @@ function MetadataViewer({ namespace, table }) {
     }
   };
 
-  const handleExpireSnapshots = async () => {
-    try {
-      const payload = olderThan ? { older_than_ms: parseInt(olderThan) } : {};
-      await api.post(`/tables/${namespace}/${table}/maintenance`, payload);
-      alert("Maintenance triggered successfully");
-      fetchMetadata(); // Refresh to see if snapshots changed
-    } catch (err) {
-      alert("Maintenance failed: " + err.message);
-    }
-  };
-
   if (loading) return <Typography>Loading metadata...</Typography>;
   if (!metadata) return <Typography>No metadata available</Typography>;
 
@@ -49,33 +38,18 @@ function MetadataViewer({ namespace, table }) {
           <Tab label="Snapshots" />
           <Tab label="Properties" />
           <Tab label="Maintenance" />
+          <Tab label="Visualization" />
         </Tabs>
       </Box>
 
       {/* Schema Tab */}
       <TabPanel value={tab} index={0}>
-        <TableContainer component={Paper}>
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell>ID</TableCell>
-                <TableCell>Name</TableCell>
-                <TableCell>Type</TableCell>
-                <TableCell>Required</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {metadata.schema.fields.map((field) => (
-                <TableRow key={field.id}>
-                  <TableCell>{field.id}</TableCell>
-                  <TableCell>{field.name}</TableCell>
-                  <TableCell>{String(field.type)}</TableCell>
-                  <TableCell>{field.required ? 'Yes' : 'No'}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
+        <SchemaEditor 
+            namespace={namespace} 
+            table={table} 
+            schema={metadata.schema} 
+            onRefresh={fetchMetadata} 
+        />
       </TabPanel>
 
       {/* Snapshots Tab */}
@@ -130,23 +104,12 @@ function MetadataViewer({ namespace, table }) {
 
       {/* Maintenance Tab */}
       <TabPanel value={tab} index={3}>
-        <Paper sx={{ p: 3 }}>
-          <Typography variant="h6" gutterBottom>Expire Snapshots</Typography>
-          <Typography variant="body2" paragraph>
-            Remove old snapshots to free up space.
-          </Typography>
-          <TextField
-            label="Older Than (Timestamp MS)"
-            value={olderThan}
-            onChange={(e) => setOlderThan(e.target.value)}
-            helperText="Leave empty to keep only current state (depending on policy)"
-            fullWidth
-            margin="normal"
-          />
-          <Button variant="contained" color="warning" onClick={handleExpireSnapshots}>
-            Expire Snapshots
-          </Button>
-        </Paper>
+        <MaintenanceControls namespace={namespace} table={table} />
+      </TabPanel>
+
+      {/* Visualization Tab */}
+      <TabPanel value={tab} index={4}>
+        <MetadataCharts namespace={namespace} table={table} />
       </TabPanel>
     </Box>
   );

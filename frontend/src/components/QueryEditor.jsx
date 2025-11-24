@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Box, TextField, Button, Paper, Typography, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, CircularProgress, Alert, Collapse, IconButton } from '@mui/material';
-import { PlayArrow, Info, ExpandMore, ExpandLess } from '@mui/icons-material';
+import { Box, TextField, Button, Paper, Typography, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, CircularProgress, Alert, Collapse, IconButton, Drawer, List, ListItem, ListItemText, ListItemSecondaryAction, Divider, Tabs, Tab } from '@mui/material';
+import { PlayArrow, Info, ExpandMore, ExpandLess, History, Bookmark, BookmarkBorder, Delete, Save } from '@mui/icons-material';
 import api from '../api';
 
 function QueryEditor({ initialNamespace, initialSql }) {
@@ -9,27 +9,83 @@ function QueryEditor({ initialNamespace, initialSql }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [showHelp, setShowHelp] = useState(false);
+  
+  // History & Saved State
+  const [history, setHistory] = useState([]);
+  const [savedQueries, setSavedQueries] = useState([]);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [drawerTab, setDrawerTab] = useState(0);
 
   useEffect(() => {
     if (initialSql) {
       setSql(initialSql);
     }
+    // Load from localStorage
+    const storedHistory = JSON.parse(localStorage.getItem('queryHistory') || '[]');
+    setHistory(storedHistory);
+    const storedSaved = JSON.parse(localStorage.getItem('savedQueries') || '[]');
+    setSavedQueries(storedSaved);
   }, [initialSql]);
+
+  const addToHistory = (query) => {
+      const newHistory = [{ sql: query, timestamp: Date.now() }, ...history].slice(0, 50);
+      setHistory(newHistory);
+      localStorage.setItem('queryHistory', JSON.stringify(newHistory));
+  };
+
+  const saveQuery = () => {
+      const name = prompt("Enter a name for this query:");
+      if (name) {
+          const newSaved = [...savedQueries, { name, sql, timestamp: Date.now() }];
+          setSavedQueries(newSaved);
+          localStorage.setItem('savedQueries', JSON.stringify(newSaved));
+      }
+  };
+
+  const deleteSaved = (index) => {
+      const newSaved = savedQueries.filter((_, i) => i !== index);
+      setSavedQueries(newSaved);
+      localStorage.setItem('savedQueries', JSON.stringify(newSaved));
+  };
 
   const handleRun = async () => {
     setLoading(true);
     setError(null);
     setResults([]);
+    addToHistory(sql);
     try {
       const res = await api.post('/query', { 
         sql, 
         namespace: initialNamespace // Optional context
       });
-      setResults(res.data.results);
+      setResults(res.data.data);
     } catch (err) {
       setError(err.response?.data?.detail || err.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleExport = async (format) => {
+    try {
+      const response = await api.post('/query/export', {
+        sql,
+        format
+      }, {
+        responseType: 'blob' // Important for file download
+      });
+      
+      // Create download link
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `export.${format}`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } catch (err) {
+      console.error("Export failed:", err);
+      setError("Export failed: " + (err.response?.data?.detail || err.message));
     }
   };
 
@@ -43,15 +99,34 @@ function QueryEditor({ initialNamespace, initialSql }) {
   };
 
   return (
-    <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', gap: 2 }}>
+    <Box sx={{ height: '100%', display: 'flex', gap: 2 }}>
+      <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
       <Paper sx={{ p: 2 }}>
         <Box sx={{ mb: 1, display: 'flex', gap: 1, alignItems: 'center' }}>
           <Button variant="contained" startIcon={<PlayArrow />} onClick={handleRun} disabled={loading}>
             Run
           </Button>
-          <Button variant="outlined" onClick={() => handleTemplate('create')}>
-            Create Table Template
+          <Button variant="outlined" startIcon={<Save />} onClick={saveQuery} disabled={!sql}>
+            Save
           </Button>
+          <Button variant="outlined" onClick={() => handleTemplate('create')}>
+            Template
+          </Button>
+          <Button variant="outlined" startIcon={<History />} onClick={() => setDrawerOpen(true)}>
+            History
+          </Button>
+          
+          {/* Export Buttons */}
+          <Button variant="text" size="small" onClick={() => handleExport('csv')} disabled={loading || !sql}>
+            CSV
+          </Button>
+          <Button variant="text" size="small" onClick={() => handleExport('json')} disabled={loading || !sql}>
+            JSON
+          </Button>
+          <Button variant="text" size="small" onClick={() => handleExport('parquet')} disabled={loading || !sql}>
+            Parquet
+          </Button>
+
           <IconButton 
             size="small" 
             onClick={() => setShowHelp(!showHelp)}
@@ -142,6 +217,58 @@ function QueryEditor({ initialNamespace, initialSql }) {
           <Typography sx={{ p: 2, color: 'text.secondary' }}>No results</Typography>
         )}
       </Paper>
+      </Box>
+
+      <Drawer anchor="right" open={drawerOpen} onClose={() => setDrawerOpen(false)}>
+          <Box sx={{ width: 350, p: 2 }}>
+              <Typography variant="h6" gutterBottom>Query Manager</Typography>
+              <Tabs value={drawerTab} onChange={(e, v) => setDrawerTab(v)} sx={{ mb: 2 }}>
+                  <Tab label="History" />
+                  <Tab label="Saved" />
+              </Tabs>
+              
+              {drawerTab === 0 && (
+                  <List>
+                      {history.map((item, i) => (
+                          <React.Fragment key={i}>
+                              <ListItem button onClick={() => { setSql(item.sql); setDrawerOpen(false); }}>
+                                  <ListItemText 
+                                    primary={item.sql} 
+                                    secondary={new Date(item.timestamp).toLocaleString()} 
+                                    primaryTypographyProps={{ noWrap: true, style: { fontFamily: 'monospace' } }}
+                                  />
+                              </ListItem>
+                              <Divider />
+                          </React.Fragment>
+                      ))}
+                      {history.length === 0 && <Typography variant="body2" color="text.secondary">No history yet.</Typography>}
+                  </List>
+              )}
+
+              {drawerTab === 1 && (
+                  <List>
+                      {savedQueries.map((item, i) => (
+                          <React.Fragment key={i}>
+                              <ListItem button onClick={() => { setSql(item.sql); setDrawerOpen(false); }}>
+                                  <ListItemText 
+                                    primary={item.name} 
+                                    secondary={item.sql}
+                                    secondaryTypographyProps={{ noWrap: true, style: { fontFamily: 'monospace' } }}
+                                  />
+                                  <ListItemSecondaryAction>
+                                      <IconButton edge="end" onClick={() => deleteSaved(i)}>
+                                          <Delete />
+                                      </IconButton>
+                                  </ListItemSecondaryAction>
+                              </ListItem>
+                              <Divider />
+                          </React.Fragment>
+                      ))}
+                      {savedQueries.length === 0 && <Typography variant="body2" color="text.secondary">No saved queries.</Typography>}
+                  </List>
+              )}
+          </Box>
+      </Drawer>
     </Box>
   );
 }
