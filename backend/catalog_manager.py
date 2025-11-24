@@ -7,7 +7,7 @@ from pyiceberg.exceptions import NoSuchTableError, NoSuchNamespaceError
 
 class CatalogManager:
     def __init__(self):
-        self.catalog: Optional[Catalog] = None
+        self.catalogs: Dict[str, Catalog] = {}
         self.config: Dict[str, Any] = {}
         self._load_initial_config()
 
@@ -19,47 +19,63 @@ class CatalogManager:
                 with open(env_path, "r") as f:
                     data = json.load(f)
                     if "catalog" in data:
-                        self.connect(data["catalog"])
+                        # Default catalog name is "default"
+                        self.connect("default", data["catalog"])
             except Exception as e:
                 print(f"Failed to load env.json: {e}")
 
-    def connect(self, properties: Dict[str, str]):
-        """Connects to the Iceberg catalog with the given properties."""
-        self.config = properties
-        # Ensure we use the REST catalog implementation if not specified, 
-        # though usually 'type': 'rest' is passed in properties or we default it.
+    def connect(self, name: str, properties: Dict[str, str]):
+        """Connects to an Iceberg catalog and stores it with the given name."""
+        # Ensure we use the REST catalog implementation if not specified
         if "type" not in properties:
             properties["type"] = "rest"
         
-        self.catalog = load_catalog("default", **properties)
-
-    def list_namespaces(self) -> List[tuple]:
-        if not self.catalog:
-            raise ValueError("Catalog not connected")
-        return self.catalog.list_namespaces()
-
-    def create_namespace(self, namespace: str, properties: Dict[str, str] = None):
-        if not self.catalog:
-            raise ValueError("Catalog not connected")
-        self.catalog.create_namespace(namespace, properties or {})
-
-    def list_tables(self, namespace: str) -> List[tuple]:
-        if not self.catalog:
-            raise ValueError("Catalog not connected")
         try:
-            return self.catalog.list_tables(namespace)
+            catalog = load_catalog(name, **properties)
+            self.catalogs[name] = catalog
+            print(f"Connected to catalog: {name}")
+        except Exception as e:
+            print(f"Failed to connect to catalog {name}: {e}")
+            raise e
+
+    def disconnect(self, name: str):
+        if name in self.catalogs:
+            del self.catalogs[name]
+
+    def get_catalog(self, name: str) -> Catalog:
+        if name not in self.catalogs:
+            # Fallback for backward compatibility or single-catalog view
+            if len(self.catalogs) == 1:
+                return list(self.catalogs.values())[0]
+            raise ValueError(f"Catalog '{name}' not found. Available: {list(self.catalogs.keys())}")
+        return self.catalogs[name]
+
+    def list_catalogs(self) -> List[str]:
+        return list(self.catalogs.keys())
+
+    def list_namespaces(self, catalog_name: str) -> List[tuple]:
+        catalog = self.get_catalog(catalog_name)
+        return catalog.list_namespaces()
+
+    def create_namespace(self, catalog_name: str, namespace: str, properties: Dict[str, str] = None):
+        catalog = self.get_catalog(catalog_name)
+        catalog.create_namespace(namespace, properties or {})
+
+    def list_tables(self, catalog_name: str, namespace: str) -> List[tuple]:
+        catalog = self.get_catalog(catalog_name)
+        try:
+            return catalog.list_tables(namespace)
         except NoSuchNamespaceError:
             return []
 
-    def get_table(self, namespace: str, table_name: str) -> Table:
-        if not self.catalog:
-            raise ValueError("Catalog not connected")
-        return self.catalog.load_table(f"{namespace}.{table_name}")
+    def get_table(self, catalog_name: str, namespace: str, table_name: str) -> Table:
+        catalog = self.get_catalog(catalog_name)
+        return catalog.load_table(f"{namespace}.{table_name}")
 
-    def get_table_metadata(self, namespace: str, table_name: str) -> Dict[str, Any]:
-        table = self.get_table(namespace, table_name)
+    def get_table_metadata(self, catalog_name: str, namespace: str, table_name: str) -> Dict[str, Any]:
+        table = self.get_table(catalog_name, namespace, table_name)
         return {
-            "identifier": f"{namespace}.{table_name}",
+            "identifier": f"{catalog_name}.{namespace}.{table_name}",
             "schema": table.schema().model_dump(mode="json"),
             "partition_spec": [spec.model_dump() for spec in table.specs().values()],
             "properties": table.properties,
@@ -67,12 +83,8 @@ class CatalogManager:
             "current_snapshot_id": table.current_snapshot().snapshot_id if table.current_snapshot() else None
         }
 
-    def expire_snapshots(self, namespace: str, table_name: str, older_than_ms: Optional[int] = None):
-        """
-        Expires snapshots. 
-        older_than_ms: Timestamp in milliseconds. If None, retains only the current snapshot (logic may vary).
-        """
-        table = self.get_table(namespace, table_name)
+    def expire_snapshots(self, catalog_name: str, namespace: str, table_name: str, older_than_ms: Optional[int] = None):
+        table = self.get_table(catalog_name, namespace, table_name)
         
         # PyIceberg 0.10.0+ uses manage_snapshots()
         if hasattr(table, "manage_snapshots"):
@@ -83,14 +95,10 @@ class CatalogManager:
         if older_than_ms:
             expire = expire.expire_older_than(older_than_ms)
         
-        # If no timestamp provided, we might want to just run it to clean up unreferenced files 
-        # or implement a default retention policy. For now, let's assume the user passes a timestamp 
-        # or we rely on table properties if set.
-        
         expire.commit()
 
-    def add_column(self, namespace: str, table_name: str, col_name: str, col_type: str, required: bool = False):
-        table = self.get_table(namespace, table_name)
+    def add_column(self, catalog_name: str, namespace: str, table_name: str, col_name: str, col_type: str, required: bool = False):
+        table = self.get_table(catalog_name, namespace, table_name)
         from pyiceberg.types import IntegerType, StringType, BooleanType, FloatType, DoubleType, LongType, DateType, TimestampType
         
         type_map = {
@@ -111,18 +119,18 @@ class CatalogManager:
         with table.update_schema() as update:
             update.add_column(col_name, iceberg_type, required=required)
 
-    def drop_column(self, namespace: str, table_name: str, col_name: str):
-        table = self.get_table(namespace, table_name)
+    def drop_column(self, catalog_name: str, namespace: str, table_name: str, col_name: str):
+        table = self.get_table(catalog_name, namespace, table_name)
         with table.update_schema() as update:
             update.delete_column(col_name)
 
-    def rename_column(self, namespace: str, table_name: str, col_name: str, new_name: str):
-        table = self.get_table(namespace, table_name)
+    def rename_column(self, catalog_name: str, namespace: str, table_name: str, col_name: str, new_name: str):
+        table = self.get_table(catalog_name, namespace, table_name)
         with table.update_schema() as update:
             update.rename_column(col_name, new_name)
 
-    def update_column_type(self, namespace: str, table_name: str, col_name: str, new_type: str):
-        table = self.get_table(namespace, table_name)
+    def update_column_type(self, catalog_name: str, namespace: str, table_name: str, col_name: str, new_type: str):
+        table = self.get_table(catalog_name, namespace, table_name)
         from pyiceberg.types import IntegerType, StringType, BooleanType, FloatType, DoubleType, LongType, DateType, TimestampType
         
         type_map = {

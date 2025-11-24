@@ -23,9 +23,16 @@ function QueryEditor({ initialNamespace, initialSql }) {
     // Load from localStorage
     const storedHistory = JSON.parse(localStorage.getItem('queryHistory') || '[]');
     setHistory(storedHistory);
-    const storedSaved = JSON.parse(localStorage.getItem('savedQueries') || '[]');
-    setSavedQueries(storedSaved);
   }, [initialSql]);
+
+  // Load history/saved from local storage
+  useEffect(() => {
+      const storedHistory = localStorage.getItem('queryHistory');
+      if (storedHistory) setHistory(JSON.parse(storedHistory));
+      
+      const storedSaved = localStorage.getItem('savedQueries');
+      if (storedSaved) setSavedQueries(JSON.parse(storedSaved));
+  }, []);
 
   const addToHistory = (query) => {
       const newHistory = [{ sql: query, timestamp: Date.now() }, ...history].slice(0, 50);
@@ -51,14 +58,15 @@ function QueryEditor({ initialNamespace, initialSql }) {
   const handleRun = async () => {
     setLoading(true);
     setError(null);
-    setResults([]);
-    addToHistory(sql);
+    setResult(null);
     try {
       const res = await api.post('/query', { 
         sql, 
-        namespace: initialNamespace // Optional context
+        namespace: initialNamespace, // Optional context
+        catalog
       });
-      setResults(res.data.data);
+      setResult(res.data.data);
+      addToHistory(sql);
     } catch (err) {
       setError(err.response?.data?.detail || err.message);
     } finally {
@@ -70,7 +78,8 @@ function QueryEditor({ initialNamespace, initialSql }) {
     try {
       const response = await api.post('/query/export', {
         sql,
-        format
+        format,
+        catalog
       }, {
         responseType: 'blob' // Important for file download
       });

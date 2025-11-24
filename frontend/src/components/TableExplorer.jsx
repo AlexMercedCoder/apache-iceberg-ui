@@ -1,129 +1,133 @@
 import React, { useState, useEffect } from 'react';
-import { List, ListItem, ListItemText, ListItemIcon, Collapse, Typography, Button, TextField, Dialog, DialogTitle, DialogContent, DialogActions, IconButton } from '@mui/material';
-import { ExpandLess, ExpandMore, Folder, TableChart, Add, Code } from '@mui/icons-material';
+import { 
+  List, ListItem, ListItemText, Collapse, ListItemIcon, 
+  Typography, CircularProgress, Box, Select, MenuItem, FormControl, InputLabel, IconButton
+} from '@mui/material';
+import { ExpandLess, ExpandMore, Folder, TableChart, CloudUpload } from '@mui/icons-material';
 import api from '../api';
+import FileUploadDialog from './FileUploadDialog';
 
-function TableExplorer({ onSelectTable, onQueryTable }) {
+function TableExplorer({ catalog, catalogs, onCatalogChange, onSelectTable }) {
   const [namespaces, setNamespaces] = useState([]);
-  const [expandedNamespace, setExpandedNamespace] = useState(null);
-  const [tables, setTables] = useState({}); // { namespace: [tables] }
-  const [openCreateNs, setOpenCreateNs] = useState(false);
-  const [newNsName, setNewNsName] = useState('');
+  const [expanded, setExpanded] = useState({});
+  const [tables, setTables] = useState({});
+  const [loading, setLoading] = useState(false);
+  const [uploadOpen, setUploadOpen] = useState(false);
+  const [uploadTarget, setUploadTarget] = useState(null); // { namespace, table }
 
   useEffect(() => {
-    fetchNamespaces();
-  }, []);
+    if (catalog) {
+      loadNamespaces();
+    }
+  }, [catalog]);
 
-  const fetchNamespaces = async () => {
+  const loadNamespaces = async () => {
+    setLoading(true);
     try {
-      const res = await api.get('/namespaces');
-      // res.data.namespaces is list of lists/tuples, e.g. [['default']] or [['ns1'], ['ns2']]
-      // We assume simple 1-level namespaces for now or flatten them
-      const nsList = res.data.namespaces.map(n => n[0]); 
-      setNamespaces(nsList);
+      const res = await api.get(`/catalogs/${catalog}/namespaces`);
+      setNamespaces(res.data.namespaces);
     } catch (err) {
-      console.error("Failed to fetch namespaces", err);
+      console.error("Failed to load namespaces", err);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleExpandNamespace = async (ns) => {
-    if (expandedNamespace === ns) {
-      setExpandedNamespace(null);
-    } else {
-      setExpandedNamespace(ns);
-      if (!tables[ns]) {
-        try {
-          const res = await api.get(`/tables/${ns}`);
-          setTables(prev => ({ ...prev, [ns]: res.data.tables }));
-        } catch (err) {
-          console.error(`Failed to fetch tables for ${ns}`, err);
-        }
+  const handleToggle = async (ns) => {
+    const nsName = Array.isArray(ns) ? ns.join('.') : ns;
+    
+    setExpanded(prev => ({ ...prev, [nsName]: !prev[nsName] }));
+    
+    if (!tables[nsName] && !expanded[nsName]) {
+      try {
+        const res = await api.get(`/catalogs/${catalog}/tables/${nsName}`);
+        setTables(prev => ({ ...prev, [nsName]: res.data.tables }));
+      } catch (err) {
+        console.error("Failed to load tables", err);
       }
     }
   };
 
-  const handleCreateNamespace = async () => {
-    try {
-      await api.post('/namespaces', { namespace: newNsName });
-      setOpenCreateNs(false);
-      setNewNsName('');
-      fetchNamespaces();
-    } catch (err) {
-      alert("Failed to create namespace");
-    }
+  const handleUploadClick = (e, namespace, table) => {
+    e.stopPropagation();
+    setUploadTarget({ namespace, table });
+    setUploadOpen(true);
   };
 
   return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px' }}>
-        <Typography variant="h6">Explorer</Typography>
-        <Button size="small" startIcon={<Add />} onClick={() => setOpenCreateNs(true)}>
-          NS
-        </Button>
-      </div>
-      <List>
-        {namespaces.map((ns) => (
-          <React.Fragment key={ns}>
-            <ListItem button onClick={() => handleExpandNamespace(ns)}>
-              <ListItemIcon><Folder /></ListItemIcon>
-              <ListItemText primary={ns} />
-              {expandedNamespace === ns ? <ExpandLess /> : <ExpandMore />}
-            </ListItem>
-            <Collapse in={expandedNamespace === ns} timeout="auto" unmountOnExit>
-              <List component="div" disablePadding>
-                {tables[ns]?.map((table) => (
-                  <ListItem 
-                    button 
-                    key={table} 
-                    sx={{ pl: 4 }} 
-                    onClick={() => onSelectTable(ns, table)}
-                    secondaryAction={
-                      <IconButton 
-                        edge="end" 
-                        size="small" 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onQueryTable(ns, table);
-                        }}
-                        title="Query this table"
-                      >
-                        <Code fontSize="small" />
-                      </IconButton>
-                    }
-                  >
-                    <ListItemIcon><TableChart fontSize="small" /></ListItemIcon>
-                    <ListItemText primary={table} />
-                  </ListItem>
+    <Box>
+      <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
+        <FormControl fullWidth size="small" sx={{ mb: 2 }}>
+            <InputLabel>Catalog</InputLabel>
+            <Select
+                value={catalog}
+                label="Catalog"
+                onChange={(e) => onCatalogChange(e.target.value)}
+            >
+                {catalogs.map(c => (
+                    <MenuItem key={c} value={c}>{c}</MenuItem>
                 ))}
-                {(!tables[ns] || tables[ns].length === 0) && (
-                  <ListItem sx={{ pl: 4 }}>
-                    <ListItemText primary="No tables" secondary="Use Query to create" />
-                  </ListItem>
-                )}
-              </List>
-            </Collapse>
-          </React.Fragment>
-        ))}
-      </List>
-
-      <Dialog open={openCreateNs} onClose={() => setOpenCreateNs(false)}>
-        <DialogTitle>Create Namespace</DialogTitle>
-        <DialogContent>
-          <TextField
-            autoFocus
-            margin="dense"
-            label="Namespace Name"
-            fullWidth
-            value={newNsName}
-            onChange={(e) => setNewNsName(e.target.value)}
-          />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setOpenCreateNs(false)}>Cancel</Button>
-          <Button onClick={handleCreateNamespace}>Create</Button>
-        </DialogActions>
-      </Dialog>
-    </div>
+            </Select>
+        </FormControl>
+        <Typography variant="h6" gutterBottom>Explorer</Typography>
+      </Box>
+      
+      {loading ? (
+        <Box sx={{ display: 'flex', justifyContent: 'center', p: 2 }}>
+          <CircularProgress size={24} />
+        </Box>
+      ) : (
+        <List component="nav">
+          {namespaces.map((ns) => {
+            const nsName = Array.isArray(ns) ? ns.join('.') : ns;
+            return (
+              <React.Fragment key={nsName}>
+                <ListItem button onClick={() => handleToggle(ns)}>
+                  <ListItemIcon><Folder /></ListItemIcon>
+                  <ListItemText primary={nsName} />
+                  {expanded[nsName] ? <ExpandLess /> : <ExpandMore />}
+                </ListItem>
+                <Collapse in={expanded[nsName]} timeout="auto" unmountOnExit>
+                  <List component="div" disablePadding>
+                    {tables[nsName]?.map((table) => (
+                      <ListItem 
+                        key={table} 
+                        button 
+                        sx={{ pl: 4 }}
+                        onClick={() => onSelectTable(nsName, table)}
+                        secondaryAction={
+                            <IconButton edge="end" aria-label="upload" onClick={(e) => handleUploadClick(e, nsName, table)}>
+                                <CloudUpload fontSize="small" />
+                            </IconButton>
+                        }
+                      >
+                        <ListItemIcon><TableChart fontSize="small" /></ListItemIcon>
+                        <ListItemText primary={table} />
+                      </ListItem>
+                    ))}
+                    {(!tables[nsName] || tables[nsName].length === 0) && (
+                        <ListItem sx={{ pl: 4 }}>
+                            <ListItemText secondary="No tables found" />
+                        </ListItem>
+                    )}
+                  </List>
+                </Collapse>
+              </React.Fragment>
+            );
+          })}
+        </List>
+      )}
+      
+      {uploadTarget && (
+        <FileUploadDialog 
+            open={uploadOpen} 
+            onClose={() => setUploadOpen(false)}
+            catalog={catalog}
+            namespace={uploadTarget.namespace}
+            table={uploadTarget.table}
+        />
+      )}
+    </Box>
   );
 }
 

@@ -7,11 +7,13 @@ function ConnectionForm({ onConnect }) {
   const [credential, setCredential] = useState('admin:password');
   const [token, setToken] = useState('');
   const [warehouse, setWarehouse] = useState('s3://warehouse/wh');
+  const [catalogName, setCatalogName] = useState('default'); // New state for catalog name
   const [additionalJson, setAdditionalJson] = useState('{\n  "s3.endpoint": "http://localhost:9000",\n  "s3.access-key-id": "admin",\n  "s3.secret-access-key": "password"\n}');
 
   const handleSubmit = (e) => {
     e.preventDefault();
     let properties = {
+      name: catalogName, // Include catalog name in properties
       uri,
       warehouse,
     };
@@ -38,6 +40,15 @@ function ConnectionForm({ onConnect }) {
       <Paper sx={{ p: 4, width: '100%', maxWidth: 600 }}>
         <Typography variant="h5" gutterBottom>Connect to Iceberg Catalog</Typography>
         <form onSubmit={handleSubmit}>
+          <TextField
+            fullWidth
+            label="Catalog Name (Alias)"
+            value={catalogName}
+            onChange={(e) => setCatalogName(e.target.value)}
+            margin="normal"
+            helperText="Unique name for this catalog connection"
+            required
+          />
           <TextField
             fullWidth
             label="Catalog URI"
@@ -81,6 +92,14 @@ function ConnectionForm({ onConnect }) {
             value={warehouse}
             onChange={(e) => setWarehouse(e.target.value)}
             margin="normal"
+          />
+          <TextField
+            fullWidth
+            label="Catalog Name"
+            value={catalogName}
+            onChange={(e) => setCatalogName(e.target.value)}
+            margin="normal"
+            required
           />
           <TextField
             fullWidth

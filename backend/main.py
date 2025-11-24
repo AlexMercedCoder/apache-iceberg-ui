@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Body
+from fastapi import FastAPI, HTTPException, Body, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, StreamingResponse
@@ -34,6 +34,7 @@ catalog_manager = CatalogManager()
 query_engine = QueryEngine(catalog_manager)
 
 class ConnectRequest(BaseModel):
+    name: str = "default"
     properties: Dict[str, str]
 
 class CreateNamespaceRequest(BaseModel):
@@ -42,7 +43,8 @@ class CreateNamespaceRequest(BaseModel):
 
 class QueryRequest(BaseModel):
     sql: str
-    namespace: Optional[str] = None # Optional context to load tables from
+    catalog: str = "default" # Default context
+    namespace: Optional[str] = None # Optional context
 
 class MaintenanceRequest(BaseModel):
     older_than_ms: Optional[int] = None
@@ -50,44 +52,53 @@ class MaintenanceRequest(BaseModel):
 @app.post("/connect")
 def connect_catalog(request: ConnectRequest):
     try:
-        catalog_manager.connect(request.properties)
-        return {"status": "connected", "config": request.properties}
+        catalog_manager.connect(request.name, request.properties)
+        return {"status": "connected", "name": request.name}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+@app.post("/disconnect/{name}")
+def disconnect_catalog(name: str):
+    catalog_manager.disconnect(name)
+    return {"status": "disconnected"}
 
 @app.get("/status")
 def get_status():
     return {"connected": catalog_manager.catalog is not None}
 
-@app.get("/namespaces")
-def list_namespaces():
+@app.get("/catalogs")
+def list_catalogs():
+    return {"catalogs": catalog_manager.list_catalogs()}
+
+@app.get("/catalogs/{catalog}/namespaces")
+def list_namespaces(catalog: str):
     try:
-        namespaces = catalog_manager.list_namespaces()
+        namespaces = catalog_manager.list_namespaces(catalog)
         # namespaces are tuples, convert to list of strings or list of lists
         return {"namespaces": [ns for ns in namespaces]}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/namespaces")
-def create_namespace(request: CreateNamespaceRequest):
+@app.post("/catalogs/{catalog}/namespaces")
+def create_namespace(catalog: str, request: CreateNamespaceRequest):
     try:
-        catalog_manager.create_namespace(request.namespace, request.properties)
+        catalog_manager.create_namespace(catalog, request.namespace, request.properties)
         return {"status": "created", "namespace": request.namespace}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-@app.get("/tables/{namespace}")
-def list_tables(namespace: str):
+@app.get("/catalogs/{catalog}/tables/{namespace}")
+def list_tables(catalog: str, namespace: str):
     try:
-        tables = catalog_manager.list_tables(namespace)
+        tables = catalog_manager.list_tables(catalog, namespace)
         return {"tables": [t[-1] for t in tables]} # Return just table names
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/tables/{namespace}/{table}/metadata")
-def get_table_metadata(namespace: str, table: str):
+@app.get("/catalogs/{catalog}/tables/{namespace}/{table}/metadata")
+def get_table_metadata(catalog: str, namespace: str, table: str):
     try:
-        metadata = catalog_manager.get_table_metadata(namespace, table)
+        metadata = catalog_manager.get_table_metadata(catalog, namespace, table)
         return metadata
     except Exception as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -97,22 +108,24 @@ def run_query(query: QueryRequest):
     try:
         # If a namespace is provided, pre-load tables from it
         if query.namespace:
-            query_engine.register_all_tables_in_namespace(query.namespace)
+            query_engine.register_all_tables_in_namespace(query.catalog, query.namespace)
         
-        result = query_engine.execute_query(query.sql)
+        result = query_engine.execute_query(query.sql, default_catalog=query.catalog)
         return {"data": result}
     except Exception as e:
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 class ExportRequest(BaseModel):
     sql: str
     format: str = "csv" # csv, json, parquet
+    catalog: str = "default"
 
 @app.post("/query/export")
 def export_query(request: ExportRequest):
     try:
         # Get result as Arrow Table
-        arrow_table = query_engine.execute_query(request.sql, return_arrow=True)
+        arrow_table = query_engine.execute_query(request.sql, return_arrow=True, default_catalog=request.catalog)
         
         # Handle metadata table results (list of dicts)
         if isinstance(arrow_table, list):
@@ -164,93 +177,60 @@ def export_query(request: ExportRequest):
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/tables/{namespace}/{table}/maintenance")
-def expire_snapshots(namespace: str, table: str, request: MaintenanceRequest):
+@app.post("/catalogs/{catalog}/tables/{namespace}/{table}/maintenance")
+def expire_snapshots(catalog: str, namespace: str, table: str, request: MaintenanceRequest):
     try:
-        catalog_manager.expire_snapshots(namespace, table, request.older_than_ms)
+        catalog_manager.expire_snapshots(catalog, namespace, table, request.older_than_ms)
         return {"status": "maintenance_completed"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-class AddColumnRequest(BaseModel):
-    name: str
-    type: str
-    required: bool = False
-
-class RenameColumnRequest(BaseModel):
-    name: str
-    new_name: str
-
-class UpdateColumnRequest(BaseModel):
-    name: str
-    new_type: str
-
-class DropColumnRequest(BaseModel):
-    name: str
-
-@app.post("/tables/{namespace}/{table}/schema/add")
-def add_column(namespace: str, table: str, request: AddColumnRequest):
+@app.post("/catalogs/{catalog}/tables/{namespace}/{table}/load")
+def load_table_for_query(catalog: str, namespace: str, table: str):
     try:
-        catalog_manager.add_column(namespace, table, request.name, request.type, request.required)
-        return {"status": "column_added"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/tables/{namespace}/{table}/schema/drop")
-def drop_column(namespace: str, table: str, request: DropColumnRequest):
-    try:
-        catalog_manager.drop_column(namespace, table, request.name)
-        return {"status": "column_dropped"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/tables/{namespace}/{table}/schema/rename")
-def rename_column(namespace: str, table: str, request: RenameColumnRequest):
-    try:
-        catalog_manager.rename_column(namespace, table, request.name, request.new_name)
-        return {"status": "column_renamed"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/tables/{namespace}/{table}/schema/update")
-def update_column(namespace: str, table: str, request: UpdateColumnRequest):
-    try:
-        catalog_manager.update_column_type(namespace, table, request.name, request.new_type)
-        return {"status": "column_updated"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/tables/{namespace}/{table}/load")
-def load_table_for_query(namespace: str, table: str):
-    try:
-        query_engine._ensure_table_registered(namespace, table)
+        query_engine._ensure_table_registered(catalog, namespace, table)
         return {"status": "loaded"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/tables/{namespace}/{table}/stats")
-def get_table_stats(namespace: str, table: str):
-    try:
-        # Query metadata tables
-        # We need to ensure the table is registered first
-        query_engine._ensure_table_registered(namespace, table)
-        
-        # Get partitions
-        partitions_sql = f"SELECT * FROM {namespace}.{table}$partitions"
-        partitions_data = query_engine.execute_query(partitions_sql)
-        
-        # Get files (limit to avoid huge response if many files)
-        files_sql = f"SELECT file_path, file_format, record_count, file_size_in_bytes FROM {namespace}.{table}$files LIMIT 1000"
-        files_data = query_engine.execute_query(files_sql)
-        
-        return {
-            "partitions": partitions_data,
-            "files": files_data
-        }
     except Exception as e:
-        # If metadata tables fail (e.g. unpartitioned), return empty
-        print(f"Stats query failed: {e}")
-        return {"partitions": [], "files": []}
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+
+@app.post("/catalogs/{catalog}/tables/{namespace}/{table}/upload")
+async def upload_file(catalog: str, namespace: str, table: str, file: UploadFile = File(...)):
+    try:
+        contents = await file.read()
+        
+        # Determine file type
+        filename = file.filename.lower()
+        if filename.endswith('.csv'):
+            # Convert CSV to Arrow Table
+            arrow_table = csv.read_csv(io.BytesIO(contents))
+        elif filename.endswith('.json'):
+            # Convert JSON to Arrow Table
+            data = json.loads(contents)
+            if isinstance(data, dict):
+                data = [data]
+            arrow_table = pa.Table.from_pylist(data)
+        elif filename.endswith('.parquet'):
+            # Read Parquet to Arrow Table
+            arrow_table = parquet.read_table(io.BytesIO(contents))
+        else:
+            raise HTTPException(status_code=400, detail="Unsupported file type. Use CSV, JSON, or Parquet.")
+
+        # Append to Iceberg table
+        # We need to get the table first
+        iceberg_table = catalog_manager.get_table(catalog, namespace, table)
+        iceberg_table.append(arrow_table)
+        
+        return {"status": "uploaded", "rows_appended": arrow_table.num_rows}
+
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 # Catch-all for SPA client-side routing
 @app.get("/{full_path:path}")

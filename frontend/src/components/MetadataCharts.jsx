@@ -2,29 +2,30 @@ import React, { useEffect, useState } from 'react';
 import { Box, Typography, Paper, Grid, CircularProgress, Alert } from '@mui/material';
 import api from '../api';
 
-function MetadataCharts({ namespace, table }) {
-  const [stats, setStats] = useState(null);
+function MetadataCharts({ catalog, namespace, table }) {
+  const [stats, setStats] = useState({ partitions: [], files: [] });
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+  // Removed error state as per instruction, but keeping the Alert for consistency if error handling is desired.
+  // For now, it will just log to console.
+
+  const fetchStats = async () => {
+    setLoading(true);
+    try {
+      const res = await api.get(`/catalogs/${catalog}/tables/${namespace}/${table}/stats`);
+      setStats(res.data);
+    } catch (err) {
+      console.error("Failed to fetch stats", err);
+      // If error state was to be kept, it would be setError("Failed to fetch stats");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchStats = async () => {
-      setLoading(true);
-      try {
-        const res = await api.get(`/tables/${namespace}/${table}/stats`);
-        setStats(res.data);
-      } catch (err) {
-        setError("Failed to load stats");
-        console.error(err);
-      } finally {
-        setLoading(false);
-      }
-    };
     fetchStats();
-  }, [namespace, table]);
+  }, [catalog, namespace, table]);
 
   if (loading) return <CircularProgress />;
-  if (error) return <Alert severity="error">{error}</Alert>;
   if (!stats) return null;
 
   // Process data for charts
