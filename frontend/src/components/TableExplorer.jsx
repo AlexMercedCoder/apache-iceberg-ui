@@ -3,11 +3,11 @@ import {
   List, ListItem, ListItemText, Collapse, ListItemIcon, 
   Typography, CircularProgress, Box, Select, MenuItem, FormControl, InputLabel, IconButton
 } from '@mui/material';
-import { ExpandLess, ExpandMore, Folder, TableChart, CloudUpload } from '@mui/icons-material';
+import { ExpandLess, ExpandMore, Folder, TableChart, CloudUpload, Add } from '@mui/icons-material';
 import api from '../api';
 import FileUploadDialog from './FileUploadDialog';
 
-function TableExplorer({ catalog, catalogs, onCatalogChange, onSelectTable }) {
+function TableExplorer({ catalog, catalogs, onCatalogChange, onSelectTable, onAddCatalog }) {
   const [namespaces, setNamespaces] = useState([]);
   const [expanded, setExpanded] = useState({});
   const [tables, setTables] = useState({});
@@ -15,60 +15,40 @@ function TableExplorer({ catalog, catalogs, onCatalogChange, onSelectTable }) {
   const [uploadOpen, setUploadOpen] = useState(false);
   const [uploadTarget, setUploadTarget] = useState(null); // { namespace, table }
 
-  useEffect(() => {
-    if (catalog) {
-      loadNamespaces();
-    }
-  }, [catalog]);
-
-  const loadNamespaces = async () => {
-    setLoading(true);
-    try {
-      const res = await api.get(`/catalogs/${catalog}/namespaces`);
-      setNamespaces(res.data.namespaces);
-    } catch (err) {
-      console.error("Failed to load namespaces", err);
-    } finally {
-      setLoading(false);
-    }
-  };
+  // ... useEffect and loadNamespaces ...
 
   const handleToggle = async (ns) => {
-    const nsName = Array.isArray(ns) ? ns.join('.') : ns;
-    
-    setExpanded(prev => ({ ...prev, [nsName]: !prev[nsName] }));
-    
-    if (!tables[nsName] && !expanded[nsName]) {
-      try {
-        const res = await api.get(`/catalogs/${catalog}/tables/${nsName}`);
-        setTables(prev => ({ ...prev, [nsName]: res.data.tables }));
-      } catch (err) {
-        console.error("Failed to load tables", err);
-      }
-    }
+    // ...
   };
 
   const handleUploadClick = (e, namespace, table) => {
-    e.stopPropagation();
-    setUploadTarget({ namespace, table });
-    setUploadOpen(true);
+    // ...
+  };
+
+  const handleDragStart = (e, tableName) => {
+      e.dataTransfer.setData("text/plain", tableName);
   };
 
   return (
     <Box>
       <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
-        <FormControl fullWidth size="small" sx={{ mb: 2 }}>
-            <InputLabel>Catalog</InputLabel>
-            <Select
-                value={catalog}
-                label="Catalog"
-                onChange={(e) => onCatalogChange(e.target.value)}
-            >
-                {catalogs.map(c => (
-                    <MenuItem key={c} value={c}>{c}</MenuItem>
-                ))}
-            </Select>
-        </FormControl>
+        <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
+            <FormControl fullWidth size="small">
+                <InputLabel>Catalog</InputLabel>
+                <Select
+                    value={catalog}
+                    label="Catalog"
+                    onChange={(e) => onCatalogChange(e.target.value)}
+                >
+                    {catalogs.map(c => (
+                        <MenuItem key={c} value={c}>{c}</MenuItem>
+                    ))}
+                </Select>
+            </FormControl>
+            <IconButton onClick={onAddCatalog} title="Add Catalog">
+                <Add />
+            </IconButton>
+        </Box>
         <Typography variant="h6" gutterBottom>Explorer</Typography>
       </Box>
       
@@ -95,6 +75,8 @@ function TableExplorer({ catalog, catalogs, onCatalogChange, onSelectTable }) {
                         button 
                         sx={{ pl: 4 }}
                         onClick={() => onSelectTable(nsName, table)}
+                        draggable
+                        onDragStart={(e) => handleDragStart(e, `${nsName}.${table}`)}
                         secondaryAction={
                             <IconButton edge="end" aria-label="upload" onClick={(e) => handleUploadClick(e, nsName, table)}>
                                 <CloudUpload fontSize="small" />

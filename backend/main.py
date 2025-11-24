@@ -25,10 +25,21 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+from pathlib import Path
+
 # Serve static files if the directory exists (for production/docker)
-static_dir = os.path.join(os.path.dirname(__file__), "static")
-if os.path.exists(static_dir):
-    app.mount("/assets", StaticFiles(directory=os.path.join(static_dir, "assets")), name="assets")
+BASE_DIR = Path(__file__).resolve().parent
+static_dir = BASE_DIR / "static"
+
+print(f"DEBUG: static_dir calculated as: {static_dir}")
+print(f"DEBUG: static_dir exists: {static_dir.exists()}")
+
+if static_dir.exists():
+    assets_dir = static_dir / "assets"
+    print(f"DEBUG: Mounting static assets from {assets_dir}")
+    app.mount("/assets", StaticFiles(directory=str(assets_dir)), name="assets")
+else:
+    print("DEBUG: Static directory not found, skipping mount.")
 
 catalog_manager = CatalogManager()
 query_engine = QueryEngine(catalog_manager)
@@ -102,6 +113,15 @@ def get_table_metadata(catalog: str, namespace: str, table: str):
         return metadata
     except Exception as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+@app.get("/catalogs/{catalog}/tables/{namespace}/{table}/stats")
+def get_table_stats(catalog: str, namespace: str, table: str):
+    try:
+        stats = catalog_manager.get_table_stats(catalog, namespace, table)
+        return stats
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/query")
 def run_query(query: QueryRequest):
@@ -235,8 +255,12 @@ async def upload_file(catalog: str, namespace: str, table: str, file: UploadFile
 # Catch-all for SPA client-side routing
 @app.get("/{full_path:path}")
 async def serve_spa(full_path: str):
-    if os.path.exists(static_dir):
-        index_path = os.path.join(static_dir, "index.html")
-        if os.path.exists(index_path):
+    if static_dir.exists():
+        index_path = static_dir / "index.html"
+        if index_path.exists():
             return FileResponse(index_path)
+        else:
+             print(f"DEBUG: index.html not found at {index_path}")
+    else:
+        print(f"DEBUG: static_dir not found at {static_dir}")
     return {"message": "API is running. Static files not found (dev mode)."}

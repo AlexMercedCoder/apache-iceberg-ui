@@ -150,3 +150,35 @@ class CatalogManager:
             
         with table.update_schema() as update:
             update.update_column(col_name, field_type=iceberg_type)
+
+    def get_table_stats(self, catalog_name: str, namespace: str, table_name: str) -> Dict[str, Any]:
+        table = self.get_table(catalog_name, namespace, table_name)
+        
+        # Get files
+        files = []
+        try:
+            # Inspect the files table
+            files_table = table.inspect.files()
+            # Convert to list of dicts
+            # PyIceberg 0.6.0+ returns a PyArrow table for inspect tables
+            if hasattr(files_table, "to_pylist"):
+                files = files_table.to_pylist()
+            else:
+                # Fallback if it returns something else (older versions)
+                files = []
+        except Exception as e:
+            print(f"Error fetching files stats: {e}")
+
+        # Get partitions
+        partitions = []
+        try:
+            partitions_table = table.inspect.partitions()
+            if hasattr(partitions_table, "to_pylist"):
+                partitions = partitions_table.to_pylist()
+        except Exception as e:
+            print(f"Error fetching partitions stats: {e}")
+
+        return {
+            "files": files,
+            "partitions": partitions
+        }

@@ -2,12 +2,34 @@
 
 A modern web application for managing Apache Iceberg tables via a REST Catalog.
 
+## 🎉 What's New in Phase 4
+
+- **Multi-Catalog Support**: Connect to multiple catalogs simultaneously and switch between them
+- **Cross-Catalog Joins**: Query and join tables from different catalogs in a single SQL statement
+- **DML Operations**: Execute INSERT and DELETE statements directly on Iceberg tables
+- **File Uploads**: Upload CSV, JSON, and Parquet files to append data to your tables
+- **Enhanced UI**: Improved catalog management with dropdown selector and logout functionality
+
 ## Features
 
-- **Table Management**: Browse namespaces and tables, view metadata (schema, snapshots).
-- **SQL Querying**: Run SQL queries against your Iceberg tables using Apache DataFusion.
-- **Maintenance**: Perform table maintenance tasks like snapshot expiration.
-- **Modern UI**: Built with React and Material UI, featuring Light/Dark modes.
+### Core Functionality
+- **Multi-Catalog Support**: Connect to and manage multiple Iceberg catalogs simultaneously
+- **Table Management**: Browse namespaces and tables across all connected catalogs
+- **SQL Querying**: Run SQL queries with Apache DataFusion, including cross-catalog joins
+- **DML Operations**: Execute INSERT and DELETE statements on Iceberg tables
+- **File Uploads**: Upload CSV, JSON, and Parquet files to append data to tables
+- **Metadata Viewer**: View table schema, snapshots, properties, and statistics
+- **Table Maintenance**: Perform snapshot expiration and other maintenance tasks
+- **Schema Evolution**: Add, rename, drop, and update table columns
+- **Time Travel**: Query historical table snapshots
+- **Modern UI**: Built with React and Material UI, featuring Light/Dark modes
+
+### Advanced Features
+- **Cross-Catalog Joins**: Query and join tables from different catalogs in a single SQL statement
+- **Query Caching**: Automatic caching of query results for improved performance
+- **Export Results**: Export query results to CSV, JSON, or Parquet formats
+- **Query History**: Track and reuse previous queries
+- **Saved Queries**: Save frequently used queries for quick access
 
 ## Architecture
 
@@ -23,7 +45,7 @@ A modern web application for managing Apache Iceberg tables via a REST Catalog.
 
 - Python 3.9+
 - Node.js 16+
-- An Iceberg REST Catalog (e.g., `rest-catalog-open-api` compliant server).
+- (Optional) An Iceberg catalog server - you can use the included Docker Compose setup with Nessie + MinIO
 
 ### Backend Setup
 
@@ -59,25 +81,101 @@ A modern web application for managing Apache Iceberg tables via a REST Catalog.
 
 ### Configuration
 
-Copy `example.env.json` to `env.json` and update it with your catalog details. Alternatively, you can provide these details via the UI.
+#### Option 1: Using env.json (Auto-connect on startup)
+
+Copy `example.env.json` to `env.json` and update it with your catalog details. The application will automatically connect to this catalog on startup.
 
 ```json
 {
   "catalog": {
-    "uri": "http://localhost:8181",
-    "credential": "client:secret",
-    "warehouse": "s3://bucket/warehouse"
+    "uri": "https://catalog.example.com/api/iceberg",
+    "oauth2-server-uri": "https://auth.example.com/oauth/token",
+    "token": "your-token-here",
+    "warehouse": "s3://your-warehouse",
+    "type": "rest"
   }
 }
 ```
 
+**Note**: `env.json` is gitignored for security. Never commit credentials to version control.
+
+#### Option 2: Connect via UI
+
+You can also connect to catalogs directly through the UI without pre-configuring `env.json`. This allows you to:
+- Connect to multiple catalogs in a single session
+- Give each catalog a friendly name
+- Switch between catalogs easily
+
+#### Supported Catalog Types
+
+- **REST**: Iceberg REST Catalog (Dremio, Polaris, Nessie, etc.)
+- **Hive**: Hive Metastore
+- **Glue**: AWS Glue Data Catalog
+- **DynamoDB**: AWS DynamoDB Catalog
+- **SQL**: PostgreSQL, MySQL, SQLite catalogs
+
 ## Usage
 
+### Connecting to Catalogs
+
 1. Open your browser to the frontend URL (usually `http://localhost:5173`).
-2. Enter your catalog connection details if not already configured via `env.json`.
-3. Browse tables in the sidebar.
-4. Use the "Query" tab to run SQL.
-5. Use the "Metadata" tab to view table details.
+2. Click "Connect" and enter your catalog connection details:
+   - **Catalog Name**: A friendly name for this connection (e.g., "production", "staging")
+   - **Catalog Type**: REST, Hive, Glue, etc.
+   - **URI**: The catalog endpoint URL
+   - **Warehouse**: The warehouse location (S3, HDFS, etc.)
+   - **Credentials**: Authentication details if required
+
+3. You can connect to multiple catalogs and switch between them using the catalog selector.
+
+### Browsing Tables
+
+1. Use the sidebar explorer to browse namespaces and tables.
+2. Click on a table to view its metadata, schema, and snapshots.
+3. Use the upload button (cloud icon) next to any table to upload data files.
+
+### Running SQL Queries
+
+Execute SQL queries in the Query Editor:
+
+```sql
+-- Simple query
+SELECT * FROM my_namespace.my_table LIMIT 10;
+
+-- Cross-catalog join
+SELECT u.name, o.amount 
+FROM catalog1.db.users u 
+JOIN catalog2.db.orders o ON u.id = o.user_id;
+
+-- INSERT data
+INSERT INTO my_namespace.my_table VALUES (1, 'Alice'), (2, 'Bob');
+
+-- DELETE data
+DELETE FROM my_namespace.my_table WHERE id > 100;
+
+-- Time travel
+SELECT * FROM my_namespace.my_table 
+FOR SYSTEM_TIME AS OF TIMESTAMP '2024-01-01 00:00:00';
+```
+
+### Uploading Files
+
+1. Navigate to a table in the explorer.
+2. Click the upload icon (cloud) next to the table name.
+3. Select a CSV, JSON, or Parquet file.
+4. The data will be appended to the table.
+
+### Exporting Results
+
+After running a query:
+1. Click the "Export" button.
+2. Choose your format (CSV, JSON, or Parquet).
+3. The file will be downloaded to your browser.
+
+### Managing Catalogs
+
+- **Switch Catalogs**: Use the dropdown in the explorer to switch between connected catalogs.
+- **Log Out**: Click "Log Out" in the header to disconnect from all catalogs.
 
 ## Docker Usage 🐳
 

@@ -75,6 +75,8 @@ class QueryEngine:
         table_pattern = r'(?:FROM|JOIN)\s+([a-zA-Z0-9_]+(?:\.[a-zA-Z0-9_]+)+)(?:\$([a-zA-Z0-9_]+))?\b'
         matches = re.findall(table_pattern, sql, re.IGNORECASE)
         
+        print(f"DEBUG: Found {len(matches)} table references: {matches}")
+        
         # Extract WHERE clause and SELECT columns for optimization
         from sql_utils import extract_where_clause, extract_select_columns, sql_where_to_iceberg_filter
         where_clause = extract_where_clause(sql)
@@ -83,6 +85,8 @@ class QueryEngine:
         # Only apply column selection if there's a single table (not a join)
         # For joins, we need to scan all columns and let DataFusion handle the selection
         select_columns = select_columns_raw if len(matches) == 1 else None
+        
+        print(f"DEBUG: select_columns = {select_columns} (raw: {select_columns_raw}, num_tables: {len(matches)})")
         
         # Convert WHERE to PyIceberg filter
         row_filter = sql_where_to_iceberg_filter(where_clause) if where_clause else None

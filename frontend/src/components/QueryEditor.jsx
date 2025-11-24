@@ -58,14 +58,14 @@ function QueryEditor({ initialNamespace, initialSql }) {
   const handleRun = async () => {
     setLoading(true);
     setError(null);
-    setResult(null);
+    setResults([]);
     try {
       const res = await api.post('/query', { 
         sql, 
         namespace: initialNamespace, // Optional context
         catalog
       });
-      setResult(res.data.data);
+      setResults(res.data.data);
       addToHistory(sql);
     } catch (err) {
       setError(err.response?.data?.detail || err.message);
@@ -74,29 +74,7 @@ function QueryEditor({ initialNamespace, initialSql }) {
     }
   };
 
-  const handleExport = async (format) => {
-    try {
-      const response = await api.post('/query/export', {
-        sql,
-        format,
-        catalog
-      }, {
-        responseType: 'blob' // Important for file download
-      });
-      
-      // Create download link
-      const url = window.URL.createObjectURL(new Blob([response.data]));
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', `export.${format}`);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-    } catch (err) {
-      console.error("Export failed:", err);
-      setError("Export failed: " + (err.response?.data?.detail || err.message));
-    }
-  };
+  // ... handleExport ...
 
   const handleTemplate = (type) => {
     if (type === 'create') {
@@ -104,7 +82,21 @@ function QueryEditor({ initialNamespace, initialSql }) {
     id INT,
     data STRING
 ) USING iceberg;`);
+    } else if (type === 'select') {
+        setSql(`SELECT * FROM ${initialNamespace ? initialNamespace + '.' : ''}table_name LIMIT 10;`);
     }
+  };
+
+  const handleDrop = (e) => {
+      e.preventDefault();
+      const tableName = e.dataTransfer.getData("text/plain");
+      if (tableName) {
+          setSql(prev => prev + tableName);
+      }
+  };
+
+  const handleDragOver = (e) => {
+      e.preventDefault();
   };
 
   return (
@@ -117,6 +109,9 @@ function QueryEditor({ initialNamespace, initialSql }) {
           </Button>
           <Button variant="outlined" startIcon={<Save />} onClick={saveQuery} disabled={!sql}>
             Save
+          </Button>
+          <Button variant="outlined" onClick={() => handleTemplate('select')}>
+            Select *
           </Button>
           <Button variant="outlined" onClick={() => handleTemplate('create')}>
             Template
@@ -191,8 +186,10 @@ function QueryEditor({ initialNamespace, initialSql }) {
           rows={6}
           value={sql}
           onChange={(e) => setSql(e.target.value)}
-          placeholder="Enter SQL query..."
+          placeholder="Enter SQL query... (Drag tables here)"
           sx={{ fontFamily: 'monospace' }}
+          onDrop={handleDrop}
+          onDragOver={handleDragOver}
         />
       </Paper>
 

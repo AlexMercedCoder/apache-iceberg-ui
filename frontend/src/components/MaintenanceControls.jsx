@@ -1,4 +1,3 @@
-```javascript
 import React, { useState } from 'react';
 import { Box, Button, FormControl, InputLabel, MenuItem, Select, Typography, Alert, CircularProgress, Card, CardContent, TextField } from '@mui/material';
 import { DeleteSweep } from '@mui/icons-material';
@@ -68,4 +67,3 @@ function MaintenanceControls({ catalog, namespace, table }) {
 }
 
 export default MaintenanceControls;
-```

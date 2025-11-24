@@ -5,3 +5,4 @@ datafusion
 pydantic
 python-dotenv
 sqlparse
+python-multipart

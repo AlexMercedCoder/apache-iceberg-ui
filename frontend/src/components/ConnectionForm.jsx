@@ -12,24 +12,27 @@ function ConnectionForm({ onConnect }) {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    let properties = {
-      name: catalogName, // Include catalog name in properties
+    const connectionProperties = {
       uri,
       warehouse,
     };
 
     if (authType === 'credential') {
-      properties.credential = credential;
+      connectionProperties.credential = credential;
     } else {
-      properties.token = token;
+      connectionProperties.token = token;
     }
 
     try {
       if (additionalJson) {
         const jsonProps = JSON.parse(additionalJson);
-        properties = { ...properties, ...jsonProps };
+        Object.assign(connectionProperties, jsonProps);
       }
-      onConnect(properties);
+      
+      onConnect({
+        name: catalogName,
+        properties: connectionProperties
+      });
     } catch (err) {
       alert("Invalid JSON in additional properties");
     }
@@ -92,14 +95,6 @@ function ConnectionForm({ onConnect }) {
             value={warehouse}
             onChange={(e) => setWarehouse(e.target.value)}
             margin="normal"
-          />
-          <TextField
-            fullWidth
-            label="Catalog Name"
-            value={catalogName}
-            onChange={(e) => setCatalogName(e.target.value)}
-            margin="normal"
-            required
           />
           <TextField
             fullWidth

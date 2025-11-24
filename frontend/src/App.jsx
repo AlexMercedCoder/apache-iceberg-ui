@@ -1,24 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
-import { CssBaseline, Box, AppBar, Toolbar, Typography, Drawer, Button, Tabs, Tab, Container } from '@mui/material';
+import { CssBaseline, Box, AppBar, Toolbar, Typography, Drawer, Button, Tabs, Tab, Container, Dialog, DialogContent, DialogTitle, IconButton } from '@mui/material';
+import { Close } from '@mui/icons-material';
 import ConnectionForm from './components/ConnectionForm';
-import TableExplorer from './components/TableExplorer';
-import QueryEditor from './components/QueryEditor';
-import MetadataViewer from './components/MetadataViewer';
-import Documentation from './components/Documentation';
-import api from './api';
-
-const theme = createTheme({
-  palette: {
-    mode: 'light',
-    primary: {
-      main: '#1976d2',
-    },
-    secondary: {
-      main: '#dc004e',
-    },
-  },
-});
+// ... imports ...
 
 function App() {
   const [connected, setConnected] = useState(false);
@@ -26,13 +11,12 @@ function App() {
   const [activeCatalog, setActiveCatalog] = useState('default');
   const [selectedTable, setSelectedTable] = useState(null);
   const [tab, setTab] = useState(0);
+  const [addCatalogOpen, setAddCatalogOpen] = useState(false);
 
-  // Check connection status on load
-  useEffect(() => {
-    checkConnection();
-  }, []);
+  // ... useEffect ...
 
   const checkConnection = async () => {
+    // ... existing checkConnection ...
     try {
       // Fetch list of connected catalogs
       const res = await api.get('/catalogs');
@@ -53,34 +37,28 @@ function App() {
     }
   };
 
-  const handleConnect = async () => {
-    await checkConnection();
+  const handleConnect = async (properties) => {
+    try {
+      // Submit the connection to the backend
+      await api.post('/connect', properties);
+      // After successful connection, check and update the catalog list
+      await checkConnection();
+      setAddCatalogOpen(false); // Close dialog if open
+    } catch (err) {
+      console.error("Failed to connect:", err);
+      alert(`Connection failed: ${err.response?.data?.detail || err.message}`);
+    }
   };
 
-  const handleLogout = async () => {
-      // Disconnect all catalogs
-      for (const cat of catalogs) {
-          try {
-              await api.post(`/disconnect/${cat}`);
-          } catch (e) {
-              console.error(`Failed to disconnect ${cat}`, e);
-          }
-      }
-      setCatalogs([]);
-      setConnected(false);
-      setSelectedTable(null);
-  };
+  // ... handleLogout ...
 
-  const handleTableSelect = (namespace, table) => {
-    setSelectedTable({ namespace, table });
-    setTab(1); // Switch to Metadata tab
-  };
+  // ... handleTableSelect ...
 
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
       <Box sx={{ display: 'flex', height: '100vh' }}>
-        <AppBar position="fixed" sx={{ zIndex: (theme) => theme.zIndex.drawer + 1 }}>
+        <AppBar position="fixed" sx={{ zIndex: theme.zIndex.drawer + 1 }}>
           <Toolbar>
             <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1, display: 'flex', alignItems: 'center', gap: 2 }}>
               <img src="/iceberg-logo-icon.png" alt="Iceberg" style={{ height: 32 }} />
@@ -108,7 +86,8 @@ function App() {
                 catalog={activeCatalog} 
                 catalogs={catalogs}
                 onCatalogChange={setActiveCatalog}
-                onSelectTable={handleTableSelect} 
+                onSelectTable={handleTableSelect}
+                onAddCatalog={() => setAddCatalogOpen(true)}
             />
           ) : (
             <Box sx={{ p: 2 }}>
@@ -147,6 +126,28 @@ function App() {
           )}
         </Box>
       </Box>
+
+      {/* Add Catalog Dialog */}
+      <Dialog open={addCatalogOpen} onClose={() => setAddCatalogOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>
+            Add Catalog
+            <IconButton
+                aria-label="close"
+                onClick={() => setAddCatalogOpen(false)}
+                sx={{
+                    position: 'absolute',
+                    right: 8,
+                    top: 8,
+                    color: 'grey.500',
+                }}
+            >
+                <Close />
+            </IconButton>
+        </DialogTitle>
+        <DialogContent>
+            <ConnectionForm onConnect={handleConnect} />
+        </DialogContent>
+      </Dialog>
     </ThemeProvider>
   );
 }

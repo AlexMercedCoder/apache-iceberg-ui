@@ -130,6 +130,4 @@ function MetadataViewer({ catalog, namespace, table }) {
   );
 }
 
-}
-
 export default MetadataViewer;
