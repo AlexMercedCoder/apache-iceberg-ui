@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { ThemeProvider, createTheme, CssBaseline, Box, AppBar, Toolbar, Typography, Drawer, List, ListItem, ListItemIcon, ListItemText, IconButton } from '@mui/material';
-import { TableChart, Code, Settings, Menu as MenuIcon, Storage } from '@mui/icons-material';
+import { TableChart, Code, Settings, Menu as MenuIcon, Storage, Help } from '@mui/icons-material';
 import logo from './assets/logo.png';
 import ConnectionForm from './components/ConnectionForm';
 import TableExplorer from './components/TableExplorer';
 import QueryEditor from './components/QueryEditor';
 import MetadataViewer from './components/MetadataViewer';
+import Documentation from './components/Documentation';
 import api from './api';
 
 const drawerWidth = 240;
@@ -13,7 +14,7 @@ const drawerWidth = 240;
 function App() {
   const [mode, setMode] = useState('dark');
   const [connected, setConnected] = useState(false);
-  const [currentView, setCurrentView] = useState('explorer'); // explorer, query, settings
+  const [currentView, setCurrentView] = useState('explorer'); // explorer, query, settings, documentation
   const [selectedTable, setSelectedTable] = useState(null); // { namespace, table }
   const [querySql, setQuerySql] = useState('');
 
@@ -85,6 +86,8 @@ function App() {
         );
       case 'query':
         return <QueryEditor initialNamespace={selectedTable?.namespace} initialSql={querySql} />;
+      case 'documentation':
+        return <Documentation />;
       default:
         return <TableExplorer onSelectTable={handleTableSelect} />;
     }
@@ -125,6 +128,10 @@ function App() {
                 <ListItem button onClick={() => setCurrentView('query')}>
                   <ListItemIcon><Code /></ListItemIcon>
                   <ListItemText primary="Query" />
+                </ListItem>
+                <ListItem button onClick={() => setCurrentView('documentation')}>
+                  <ListItemIcon><Help /></ListItemIcon>
+                  <ListItemText primary="Docs" />
                 </ListItem>
               </List>
             </Box>
