@@ -15,10 +15,37 @@ function TableExplorer({ catalog, catalogs, onCatalogChange, onSelectTable, onAd
   const [uploadOpen, setUploadOpen] = useState(false);
   const [uploadTarget, setUploadTarget] = useState(null); // { namespace, table }
 
-  // ... useEffect and loadNamespaces ...
+  useEffect(() => {
+    if (catalog) {
+      loadNamespaces();
+    }
+  }, [catalog]);
+
+  const loadNamespaces = async () => {
+    setLoading(true);
+    try {
+      const res = await api.get(`/catalogs/${catalog}/namespaces`);
+      setNamespaces(res.data.namespaces);
+    } catch (err) {
+      console.error("Failed to load namespaces", err);
+      setNamespaces([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleToggle = async (ns) => {
-    // ...
+    const nsName = Array.isArray(ns) ? ns.join('.') : ns;
+    setExpanded(prev => ({ ...prev, [nsName]: !prev[nsName] }));
+    
+    if (!tables[nsName] && !expanded[nsName]) {
+      try {
+        const res = await api.get(`/catalogs/${catalog}/tables/${nsName}`);
+        setTables(prev => ({ ...prev, [nsName]: res.data.tables }));
+      } catch (err) {
+        console.error("Failed to load tables", err);
+      }
+    }
   };
 
   const handleUploadClick = (e, namespace, table) => {

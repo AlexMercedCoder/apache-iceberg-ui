@@ -1,11 +1,31 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import { CssBaseline, Box, AppBar, Toolbar, Typography, Drawer, Button, Tabs, Tab, Container, Dialog, DialogContent, DialogTitle, IconButton } from '@mui/material';
-import { Close } from '@mui/icons-material';
+import { Close, Brightness4, Brightness7 } from '@mui/icons-material';
+import logo from './assets/logo.png';
 import ConnectionForm from './components/ConnectionForm';
-// ... imports ...
+import TableExplorer from './components/TableExplorer';
+import QueryEditor from './components/QueryEditor';
+import MetadataViewer from './components/MetadataViewer';
+import Documentation from './components/Documentation';
+import api from './api';
+
+
 
 function App() {
+  const [mode, setMode] = useState('light');
+  
+  const theme = useMemo(() => createTheme({
+    palette: {
+      mode,
+      primary: {
+        main: '#1976d2',
+      },
+      secondary: {
+        main: '#dc004e',
+      },
+    },
+  }), [mode]);
   const [connected, setConnected] = useState(false);
   const [catalogs, setCatalogs] = useState([]);
   const [activeCatalog, setActiveCatalog] = useState('default');
@@ -13,10 +33,13 @@ function App() {
   const [tab, setTab] = useState(0);
   const [addCatalogOpen, setAddCatalogOpen] = useState(false);
 
-  // ... useEffect ...
+  // Check connection status on load
+  useEffect(() => {
+    checkConnection();
+  }, []);
 
   const checkConnection = async () => {
-    // ... existing checkConnection ...
+
     try {
       // Fetch list of connected catalogs
       const res = await api.get('/catalogs');
@@ -50,9 +73,24 @@ function App() {
     }
   };
 
-  // ... handleLogout ...
+  const handleLogout = async () => {
+      // Disconnect all catalogs
+      for (const cat of catalogs) {
+          try {
+              await api.post(`/disconnect/${cat}`);
+          } catch (e) {
+              console.error(`Failed to disconnect ${cat}`, e);
+          }
+      }
+      setCatalogs([]);
+      setConnected(false);
+      setSelectedTable(null);
+  };
 
-  // ... handleTableSelect ...
+  const handleTableSelect = (namespace, table) => {
+    setSelectedTable({ namespace, table });
+    setTab(1); // Switch to Metadata tab
+  };
 
   return (
     <ThemeProvider theme={theme}>
@@ -61,9 +99,12 @@ function App() {
         <AppBar position="fixed" sx={{ zIndex: theme.zIndex.drawer + 1 }}>
           <Toolbar>
             <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1, display: 'flex', alignItems: 'center', gap: 2 }}>
-              <img src="/iceberg-logo-icon.png" alt="Iceberg" style={{ height: 32 }} />
+              <img src={logo} alt="Iceberg" style={{ height: 32 }} />
               Iceberg UI
             </Typography>
+            <IconButton sx={{ ml: 1, mr: 1 }} onClick={() => setMode(mode === 'light' ? 'dark' : 'light')} color="inherit">
+              {mode === 'dark' ? <Brightness7 /> : <Brightness4 />}
+            </IconButton>
             {connected && (
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                     <Typography variant="body2">Active: {activeCatalog}</Typography>

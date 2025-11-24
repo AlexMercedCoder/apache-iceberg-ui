@@ -74,7 +74,31 @@ function QueryEditor({ initialNamespace, initialSql }) {
     }
   };
 
-  // ... handleExport ...
+  const handleExport = async (format) => {
+    setLoading(true);
+    try {
+      const res = await api.post('/query/export', { 
+        sql, 
+        format,
+        catalog
+      }, {
+        responseType: 'blob'
+      });
+      
+      // Create download link
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `export.${format}`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } catch (err) {
+      setError("Export failed: " + (err.response?.data?.detail || err.message));
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleTemplate = (type) => {
     if (type === 'create') {

@@ -18,9 +18,24 @@ class CatalogManager:
             try:
                 with open(env_path, "r") as f:
                     data = json.load(f)
-                    if "catalog" in data:
+                    
+                    # Support multiple catalogs
+                    if "catalogs" in data and isinstance(data["catalogs"], dict):
+                        for name, props in data["catalogs"].items():
+                            try:
+                                self.connect(name, props)
+                            except Exception as e:
+                                print(f"Failed to connect to catalog '{name}' from env.json: {e}")
+                                
+                    # Support legacy single catalog
+                    elif "catalog" in data:
                         # Default catalog name is "default"
                         self.connect("default", data["catalog"])
+                        
+                    # Support direct properties (treat as default catalog)
+                    elif "uri" in data:
+                         self.connect("default", data)
+                         
             except Exception as e:
                 print(f"Failed to load env.json: {e}")
 
