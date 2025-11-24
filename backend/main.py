@@ -1,7 +1,10 @@
 from fastapi import FastAPI, HTTPException, Body
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from typing import Dict, Any, List, Optional
+import os
 from catalog_manager import CatalogManager
 from query_engine import QueryEngine
 
@@ -15,6 +18,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Serve static files if the directory exists (for production/docker)
+static_dir = os.path.join(os.path.dirname(__file__), "static")
+if os.path.exists(static_dir):
+    app.mount("/assets", StaticFiles(directory=os.path.join(static_dir, "assets")), name="assets")
 
 catalog_manager = CatalogManager()
 query_engine = QueryEngine(catalog_manager)
@@ -105,3 +113,12 @@ def load_table_for_query(namespace: str, table: str):
         return {"status": "loaded"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+# Catch-all for SPA client-side routing
+@app.get("/{full_path:path}")
+async def serve_spa(full_path: str):
+    if os.path.exists(static_dir):
+        index_path = os.path.join(static_dir, "index.html")
+        if os.path.exists(index_path):
+            return FileResponse(index_path)
+    return {"message": "API is running. Static files not found (dev mode)."}

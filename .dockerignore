@@ -1,0 +1,19 @@
+# Sensitive files
+env.json
+backend/test_connection.py
+.env
+
+# Build artifacts and dependencies
+node_modules
+venv
+__pycache__
+*.pyc
+dist
+build
+.git
+.gitignore
+README.md
+task.md
+implementation_plan.md
+walkthrough.md
+advanced_features_plan.md

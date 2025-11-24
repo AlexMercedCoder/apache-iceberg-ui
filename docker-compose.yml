@@ -1,0 +1,65 @@
+version: '3.8'
+
+services:
+  # Iceberg UI Application
+  iceberg-ui:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - AWS_ACCESS_KEY_ID=admin
+      - AWS_SECRET_ACCESS_KEY=password
+      - AWS_REGION=us-east-1
+      - S3_ENDPOINT=http://minio:9000
+      - CATALOG_URI=http://nessie:19120/api/v1
+      - CATALOG_WAREHOUSE=s3://warehouse/
+    depends_on:
+      - nessie
+      - minio
+
+  # Nessie Catalog Server
+  nessie:
+    image: projectnessie/nessie:latest
+    ports:
+      - "19120:19120"
+    environment:
+      - QUARKUS_HTTP_PORT=19120
+      - NESSIE_VERSION_STORE_TYPE=INMEMORY
+      # Enable Iceberg REST API support
+      - NESSIE_SERVER_DEFAULT_BRANCH=main
+      # Credential Vending / Config Defaults for Minio
+      - NESSIE_CATALOG_DEFAULT_WAREHOUSE=s3://warehouse/
+      - NESSIE_CATALOG_ICEBERG_CONFIG_DEFAULTS_S3_ENDPOINT=http://minio:9000
+      - NESSIE_CATALOG_ICEBERG_CONFIG_DEFAULTS_S3_PATH_STYLE_ACCESS=true
+      - NESSIE_CATALOG_ICEBERG_CONFIG_DEFAULTS_S3_ACCESS_KEY_ID=admin
+      - NESSIE_CATALOG_ICEBERG_CONFIG_DEFAULTS_S3_SECRET_ACCESS_KEY=password
+      - NESSIE_CATALOG_ICEBERG_CONFIG_DEFAULTS_CLIENT_REGION=us-east-1
+
+  # Minio S3 Storage
+  minio:
+    image: minio/minio:latest
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      - MINIO_ROOT_USER=admin
+      - MINIO_ROOT_PASSWORD=password
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+
+  # Create Buckets
+  createbuckets:
+    image: minio/mc
+    depends_on:
+      - minio
+    entrypoint: >
+      /bin/sh -c "
+      /usr/bin/mc alias set myminio http://minio:9000 admin password;
+      /usr/bin/mc mb myminio/warehouse;
+      /usr/bin/mc anonymous set public myminio/warehouse;
+      exit 0;
+      "
+
+volumes:
+  minio_data:

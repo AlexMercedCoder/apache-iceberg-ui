@@ -67,18 +67,37 @@ function QueryEditor({ initialNamespace, initialSql }) {
             <Typography variant="subtitle2" gutterBottom><strong>Supported Queries:</strong></Typography>
             <Typography variant="body2" component="div">
               <strong>✓ SELECT</strong> - Read data from tables<br />
-              <em>Example: SELECT * FROM namespace.table LIMIT 10</em>
+              <em>Basic: SELECT * FROM namespace.table LIMIT 10</em><br />
+              <em>Optimized: SELECT name, email FROM db.customers WHERE id {'>'} 100</em>
             </Typography>
             <Typography variant="body2" component="div" sx={{ mt: 1 }}>
               <strong>✓ CREATE TABLE</strong> - Create new tables<br />
               <em>Example: CREATE TABLE db.mytable (id INT, name STRING) USING iceberg</em>
+            </Typography>
+            <Typography variant="body2" component="div" sx={{ mt: 1 }}>
+              <strong>✓ Time Travel</strong> - Query historical data<br />
+              <em>By Snapshot: SELECT * FROM db.customers FOR SYSTEM_TIME AS OF SNAPSHOT 12345</em><br />
+              <em>By Timestamp: SELECT * FROM db.customers FOR SYSTEM_TIME AS OF TIMESTAMP 1700000000000</em>
+            </Typography>
+            <Typography variant="body2" component="div" sx={{ mt: 1 }}>
+              <strong>✓ Metadata Tables</strong> - Query table metadata<br />
+              <em>Snapshots: SELECT * FROM db.customers$snapshots</em><br />
+              <em>Statistics: SELECT * FROM db.customers$stats</em><br />
+              <em>Files: SELECT * FROM db.customers$files</em>
+            </Typography>
+            <Typography variant="subtitle2" sx={{ mt: 2 }} gutterBottom><strong>Performance Optimizations:</strong></Typography>
+            <Typography variant="body2" component="div">
+              • <strong>Predicate Pushdown:</strong> WHERE clauses filter data at storage level (huge perf boost!)<br />
+              • <strong>Column Projection:</strong> SELECT specific columns reads only those columns<br />
+              • <strong>Partition Pruning:</strong> Automatically skips irrelevant partitions
             </Typography>
             <Typography variant="subtitle2" sx={{ mt: 2 }} gutterBottom><strong>Not Supported:</strong></Typography>
             <Typography variant="body2">
               ✗ INSERT, UPDATE, DELETE, DROP, ALTER
             </Typography>
             <Typography variant="caption" display="block" sx={{ mt: 1 }}>
-              <strong>Note:</strong> Always use namespace-qualified table names (e.g., <code>db.customers</code>) to avoid conflicts.
+              <strong>Tip:</strong> Always use namespace-qualified names (e.g., <code>db.customers</code>). 
+              Check the Snapshots tab in metadata view to find snapshot IDs for time travel.
             </Typography>
           </Alert>
         </Collapse>
