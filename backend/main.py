@@ -243,9 +243,107 @@ async def upload_file(catalog: str, namespace: str, table: str, file: UploadFile
         # Append to Iceberg table
         # We need to get the table first
         iceberg_table = catalog_manager.get_table(catalog, namespace, table)
+        
+        # Ensure name mapping exists to avoid "Parquet file does not have field-ids" error
+        # This is important if the file being written (or read back) lacks field IDs
+        if "schema.name-mapping.default" not in iceberg_table.properties:
+             try:
+                 from pyiceberg.table.name_mapping import name_mapping_from_schema
+                 name_mapping = name_mapping_from_schema(iceberg_table.schema())
+                 # Use transaction to update properties
+                 with iceberg_table.transaction() as txn:
+                     txn.set_properties({"schema.name-mapping.default": name_mapping.model_dump_json()})
+             except Exception as e:
+                 print(f"Warning: Failed to set name mapping: {e}")
+
         iceberg_table.append(arrow_table)
         
         return {"status": "uploaded", "rows_appended": arrow_table.num_rows}
+
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/catalogs/{catalog}/namespaces/{namespace}/upload")
+async def create_table_from_file(catalog: str, namespace: str, table_name: str = Body(...), file: UploadFile = File(...)):
+    try:
+        contents = await file.read()
+        
+        # Determine file type
+        filename = file.filename.lower()
+        if filename.endswith('.csv'):
+            # Convert CSV to Arrow Table
+            arrow_table = csv.read_csv(io.BytesIO(contents))
+        elif filename.endswith('.json'):
+            # Convert JSON to Arrow Table
+            data = json.loads(contents)
+            if isinstance(data, dict):
+                data = [data]
+            arrow_table = pa.Table.from_pylist(data)
+        elif filename.endswith('.parquet'):
+            # Read Parquet to Arrow Table
+            arrow_table = parquet.read_table(io.BytesIO(contents))
+        else:
+            raise HTTPException(status_code=400, detail="Unsupported file type. Use CSV, JSON, or Parquet.")
+
+        # Create table with inferred schema
+        # Create table with inferred schema
+        # Manual conversion to avoid "Parquet file does not have field-ids" error from pyarrow_to_schema
+        from pyiceberg.schema import Schema
+        from pyiceberg.types import NestedField, StringType, IntegerType, LongType, FloatType, DoubleType, BooleanType, DateType, TimestampType
+        
+        def arrow_type_to_iceberg(arrow_type):
+            if pa.types.is_string(arrow_type) or pa.types.is_large_string(arrow_type):
+                return StringType()
+            elif pa.types.is_int32(arrow_type):
+                return IntegerType()
+            elif pa.types.is_int64(arrow_type):
+                return LongType()
+            elif pa.types.is_float32(arrow_type):
+                return FloatType()
+            elif pa.types.is_float64(arrow_type):
+                return DoubleType()
+            elif pa.types.is_boolean(arrow_type):
+                return BooleanType()
+            elif pa.types.is_date32(arrow_type) or pa.types.is_date64(arrow_type):
+                return DateType()
+            elif pa.types.is_timestamp(arrow_type):
+                return TimestampType()
+            else:
+                return StringType() # Default to string for unknown types
+
+        fields = []
+        for i, field in enumerate(arrow_table.schema):
+            iceberg_type = arrow_type_to_iceberg(field.type)
+            fields.append(NestedField(field_id=i+1, name=field.name, field_type=iceberg_type, required=False))
+            
+        iceberg_schema = Schema(*fields)
+        
+        catalog_obj = catalog_manager.get_catalog(catalog)
+        
+        # Check if table exists
+        try:
+            catalog_obj.load_table(f"{namespace}.{table_name}")
+            raise HTTPException(status_code=400, detail=f"Table {namespace}.{table_name} already exists.")
+        except:
+            pass # Table does not exist, proceed
+            
+        # Prepare properties with name mapping
+        properties = {}
+        try:
+            from pyiceberg.table.name_mapping import name_mapping_from_schema
+            name_mapping = name_mapping_from_schema(iceberg_schema)
+            properties["schema.name-mapping.default"] = name_mapping.model_dump_json()
+        except Exception as e:
+            print(f"Warning: Failed to generate name mapping: {e}")
+
+        # Create table
+        table = catalog_obj.create_table(f"{namespace}.{table_name}", schema=iceberg_schema, properties=properties)
+        
+        # Append data
+        table.append(arrow_table)
+        
+        return {"status": "created", "table": table_name, "rows": arrow_table.num_rows}
 
     except Exception as e:
         traceback.print_exc()
