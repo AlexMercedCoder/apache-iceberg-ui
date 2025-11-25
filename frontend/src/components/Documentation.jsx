@@ -43,7 +43,10 @@ function Documentation() {
           <strong>DML Operations:</strong> Execute INSERT and DELETE statements directly on your Iceberg tables.
         </Typography>
         <Typography paragraph>
-          <strong>File Uploads:</strong> Upload CSV, JSON, and Parquet files to append data to your tables.
+          <strong>File Uploads:</strong> Upload CSV, JSON, and Parquet files to append data to existing tables or create new ones.
+        </Typography>
+        <Typography paragraph>
+          <strong>Quick Query:</strong> Use the "Play" button next to any table to instantly populate a query.
         </Typography>
       </Section>
 
@@ -60,6 +63,19 @@ function Documentation() {
           4. Provide connection details (URI, warehouse, credentials)<br/>
           5. Click "Connect"
         </Typography>
+
+        <Typography variant="subtitle2">Auto-Connect via env.json</Typography>
+        <Typography paragraph>
+          You can pre-configure catalogs in <code>env.json</code> in the backend directory.
+        </Typography>
+        <CodeBlock>
+{`{
+  "catalogs": {
+    "prod": { "uri": "...", "type": "rest" },
+    "dev": { "uri": "...", "type": "rest" }
+  }
+}`}
+        </CodeBlock>
 
         <Typography variant="subtitle2">Switching Between Catalogs</Typography>
         <Typography paragraph>
@@ -79,6 +95,9 @@ function Documentation() {
         <CodeBlock>
           SELECT * FROM db.customers LIMIT 10;
         </CodeBlock>
+        <Typography paragraph>
+            <strong>Tip:</strong> Click the "Play" button (▶️) next to a table in the Explorer to automatically generate this query.
+        </Typography>
         <CodeBlock>
           SELECT id, name, email FROM db.customers WHERE region = 'US';
         </CodeBlock>
@@ -158,10 +177,11 @@ function Documentation() {
 
         <Typography variant="subtitle2">How to Upload</Typography>
         <Typography paragraph>
-          1. Navigate to a table in the Explorer sidebar<br/>
-          2. Click the cloud upload icon next to the table name<br/>
-          3. Select your file (CSV, JSON, or Parquet)<br/>
-          4. Click "Upload"
+          1. <strong>Append:</strong> Navigate to a table and click the cloud upload icon.<br/>
+          2. <strong>Create:</strong> Navigate to a namespace and click the cloud upload icon.<br/>
+          3. Select your file (CSV, JSON, or Parquet).<br/>
+          4. If creating a new table, enter the desired table name. The schema is inferred automatically.<br/>
+          5. Click "Upload".
         </Typography>
 
         <Typography variant="subtitle2">Supported Formats</Typography>

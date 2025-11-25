@@ -107,8 +107,8 @@ function MetadataViewer({ catalog, namespace, table }) {
             <TableBody>
               {metadata.snapshots.map((s) => (
                 <TableRow key={s.snapshot_id}>
-                  <TableCell>{s.snapshot_id}</TableCell>
-                  <TableCell>{new Date(s.timestamp_ms).toLocaleString()}</TableCell>
+                  <TableCell>{s.snapshot_id || s['snapshot-id']}</TableCell>
+                  <TableCell>{(s.timestamp_ms || s['timestamp-ms']) ? new Date(s.timestamp_ms || s['timestamp-ms']).toLocaleString() : 'N/A'}</TableCell>
                   <TableCell>{s.summary?.operation || 'N/A'}</TableCell>
                 </TableRow>
               ))}

@@ -3,8 +3,7 @@ import { Box, TextField, Button, Paper, Typography, Table, TableBody, TableCell,
 import { PlayArrow, Info, ExpandMore, ExpandLess, History, Bookmark, BookmarkBorder, Delete, Save } from '@mui/icons-material';
 import api from '../api';
 
-function QueryEditor({ initialNamespace, initialSql }) {
-  const [sql, setSql] = useState('SELECT * FROM ');
+function QueryEditor({ initialNamespace, catalog, sql, setSql }) {
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -17,13 +16,10 @@ function QueryEditor({ initialNamespace, initialSql }) {
   const [drawerTab, setDrawerTab] = useState(0);
 
   useEffect(() => {
-    if (initialSql) {
-      setSql(initialSql);
-    }
     // Load from localStorage
     const storedHistory = JSON.parse(localStorage.getItem('queryHistory') || '[]');
     setHistory(storedHistory);
-  }, [initialSql]);
+  }, []);
 
   // Load history/saved from local storage
   useEffect(() => {

@@ -32,6 +32,7 @@ function App() {
   const [selectedTable, setSelectedTable] = useState(null);
   const [tab, setTab] = useState(0);
   const [addCatalogOpen, setAddCatalogOpen] = useState(false);
+  const [sql, setSql] = useState('SELECT * FROM ');
 
   // Check connection status on load
   useEffect(() => {
@@ -92,6 +93,11 @@ function App() {
     setTab(1); // Switch to Metadata tab
   };
 
+  const handleQueryTable = (namespace, table) => {
+    setSql(`SELECT * FROM ${namespace}.${table} LIMIT 10;`);
+    setTab(0); // Switch to Query tab
+  };
+
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
@@ -128,6 +134,7 @@ function App() {
                 catalogs={catalogs}
                 onCatalogChange={setActiveCatalog}
                 onSelectTable={handleTableSelect}
+                onQueryTable={handleQueryTable}
                 onAddCatalog={() => setAddCatalogOpen(true)}
             />
           ) : (
@@ -153,7 +160,7 @@ function App() {
               </Tabs>
               
               <Box sx={{ flexGrow: 1, overflow: 'hidden' }}>
-                {tab === 0 && <QueryEditor initialNamespace={selectedTable?.namespace} catalog={activeCatalog} />}
+                {tab === 0 && <QueryEditor initialNamespace={selectedTable?.namespace} catalog={activeCatalog} sql={sql} setSql={setSql} />}
                 {tab === 1 && selectedTable && (
                   <MetadataViewer 
                     catalog={activeCatalog}

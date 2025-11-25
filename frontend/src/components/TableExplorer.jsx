@@ -3,11 +3,11 @@ import {
   List, ListItem, ListItemText, Collapse, ListItemIcon, 
   Typography, CircularProgress, Box, Select, MenuItem, FormControl, InputLabel, IconButton
 } from '@mui/material';
-import { ExpandLess, ExpandMore, Folder, TableChart, CloudUpload, Add } from '@mui/icons-material';
+import { ExpandLess, ExpandMore, Folder, TableChart, CloudUpload, Add, PlayArrow } from '@mui/icons-material';
 import api from '../api';
 import FileUploadDialog from './FileUploadDialog';
 
-function TableExplorer({ catalog, catalogs, onCatalogChange, onSelectTable, onAddCatalog }) {
+function TableExplorer({ catalog, catalogs, onCatalogChange, onSelectTable, onQueryTable, onAddCatalog }) {
   const [namespaces, setNamespaces] = useState([]);
   const [expanded, setExpanded] = useState({});
   const [tables, setTables] = useState({});
@@ -49,7 +49,9 @@ function TableExplorer({ catalog, catalogs, onCatalogChange, onSelectTable, onAd
   };
 
   const handleUploadClick = (e, namespace, table) => {
-    // ...
+    e.stopPropagation();
+    setUploadTarget({ namespace, table });
+    setUploadOpen(true);
   };
 
   const handleDragStart = (e, tableName) => {
@@ -89,7 +91,15 @@ function TableExplorer({ catalog, catalogs, onCatalogChange, onSelectTable, onAd
             const nsName = Array.isArray(ns) ? ns.join('.') : ns;
             return (
               <React.Fragment key={nsName}>
-                <ListItem button onClick={() => handleToggle(ns)}>
+                <ListItem 
+                  button 
+                  onClick={() => handleToggle(ns)}
+                  secondaryAction={
+                    <IconButton edge="end" aria-label="upload" onClick={(e) => handleUploadClick(e, nsName, null)} title="Upload File to Create Table">
+                        <CloudUpload fontSize="small" />
+                    </IconButton>
+                  }
+                >
                   <ListItemIcon><Folder /></ListItemIcon>
                   <ListItemText primary={nsName} />
                   {expanded[nsName] ? <ExpandLess /> : <ExpandMore />}
@@ -105,9 +115,14 @@ function TableExplorer({ catalog, catalogs, onCatalogChange, onSelectTable, onAd
                         draggable
                         onDragStart={(e) => handleDragStart(e, `${nsName}.${table}`)}
                         secondaryAction={
-                            <IconButton edge="end" aria-label="upload" onClick={(e) => handleUploadClick(e, nsName, table)}>
-                                <CloudUpload fontSize="small" />
-                            </IconButton>
+                            <Box>
+                                <IconButton edge="end" aria-label="query" onClick={(e) => { e.stopPropagation(); onQueryTable(nsName, table); }} title="Query Table">
+                                    <PlayArrow fontSize="small" />
+                                </IconButton>
+                                <IconButton edge="end" aria-label="upload" onClick={(e) => handleUploadClick(e, nsName, table)} title="Upload File">
+                                    <CloudUpload fontSize="small" />
+                                </IconButton>
+                            </Box>
                         }
                       >
                         <ListItemIcon><TableChart fontSize="small" /></ListItemIcon>

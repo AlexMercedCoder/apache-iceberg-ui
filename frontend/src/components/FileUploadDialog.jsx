@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
 import { 
     Dialog, DialogTitle, DialogContent, DialogActions, 
-    Button, Typography, Box, CircularProgress, Alert 
+    Button, Typography, Box, CircularProgress, Alert, TextField 
 } from '@mui/material';
 import { CloudUpload } from '@mui/icons-material';
 import api from '../api';
 
 function FileUploadDialog({ open, onClose, catalog, namespace, table }) {
     const [file, setFile] = useState(null);
+    const [tableName, setTableName] = useState('');
     const [uploading, setUploading] = useState(false);
     const [message, setMessage] = useState(null);
     const [error, setError] = useState(null);
@@ -29,19 +30,31 @@ function FileUploadDialog({ open, onClose, catalog, namespace, table }) {
 
         const formData = new FormData();
         formData.append('file', file);
+        if (!table) {
+            formData.append('table_name', tableName);
+        }
 
         try {
-            const res = await api.post(
-                `/catalogs/${catalog}/tables/${namespace}/${table}/upload`, 
-                formData,
-                {
-                    headers: {
-                        'Content-Type': 'multipart/form-data'
-                    }
-                }
-            );
-            setMessage(`Success! Appended ${res.data.rows_appended} rows.`);
+            let res;
+            if (table) {
+                // Append to existing table
+                res = await api.post(
+                    `/catalogs/${catalog}/tables/${namespace}/${table}/upload`, 
+                    formData,
+                    { headers: { 'Content-Type': 'multipart/form-data' } }
+                );
+                setMessage(`Success! Appended ${res.data.rows_appended} rows.`);
+            } else {
+                // Create new table
+                res = await api.post(
+                    `/catalogs/${catalog}/namespaces/${namespace}/upload`, 
+                    formData,
+                    { headers: { 'Content-Type': 'multipart/form-data' } }
+                );
+                setMessage(`Success! Created table ${res.data.table} with ${res.data.rows} rows.`);
+            }
             setFile(null);
+            setTableName('');
             // Optional: Refresh table data or notify parent
         } catch (err) {
             console.error("Upload failed", err);
@@ -60,9 +73,18 @@ function FileUploadDialog({ open, onClose, catalog, namespace, table }) {
 
     return (
         <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
-            <DialogTitle>Upload Data to {table}</DialogTitle>
+            <DialogTitle>{table ? `Upload Data to ${table}` : `Create Table in ${namespace}`}</DialogTitle>
             <DialogContent>
                 <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, py: 2 }}>
+                    {!table && (
+                        <TextField
+                            label="New Table Name"
+                            fullWidth
+                            value={tableName}
+                            onChange={(e) => setTableName(e.target.value)}
+                            placeholder="e.g. my_new_table"
+                        />
+                    )}
                     <Typography variant="body2" color="text.secondary">
                         Supported formats: CSV, JSON, Parquet. 
                         Data will be appended to the table.
@@ -99,9 +121,9 @@ function FileUploadDialog({ open, onClose, catalog, namespace, table }) {
                 <Button 
                     onClick={handleUpload} 
                     variant="contained" 
-                    disabled={!file || uploading}
+                    disabled={!file || uploading || (!table && !tableName)}
                 >
-                    Upload & Append
+                    {table ? "Upload & Append" : "Upload & Create"}
                 </Button>
             </DialogActions>
         </Dialog>

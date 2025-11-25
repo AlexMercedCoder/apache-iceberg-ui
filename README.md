@@ -133,6 +133,7 @@ You can also connect to catalogs directly through the UI without pre-configuring
 1. Use the sidebar explorer to browse namespaces and tables.
 2. Click on a table to view its metadata, schema, and snapshots.
 3. Use the upload button (cloud icon) next to any table to upload data files.
+4. Use the "Play" button (▶️) next to any table to instantly populate a `SELECT *` query in the editor.
 
 ### Running SQL Queries
 
@@ -160,10 +161,13 @@ FOR SYSTEM_TIME AS OF TIMESTAMP '2024-01-01 00:00:00';
 
 ### Uploading Files
 
-1. Navigate to a table in the explorer.
-2. Click the upload icon (cloud) next to the table name.
+### Uploading Files
+
+1. **Append Data**: Navigate to an existing table and click the upload icon (cloud) next to the table name.
+2. **Create Table**: Click the upload icon on a **Namespace** folder.
 3. Select a CSV, JSON, or Parquet file.
-4. The data will be appended to the table.
+4. If creating a new table, enter a name. The schema will be automatically inferred from the file.
+5. The data will be uploaded and the table created/updated.
 
 ### Exporting Results
 
@@ -176,6 +180,15 @@ After running a query:
 
 - **Switch Catalogs**: Use the dropdown in the explorer to switch between connected catalogs.
 - **Log Out**: Click "Log Out" in the header to disconnect from all catalogs.
+
+## Testing
+
+The project includes an End-to-End (E2E) testing suite using Playwright.
+
+```bash
+cd frontend
+npx playwright test
+```
 
 ## Docker Usage 🐳
 
