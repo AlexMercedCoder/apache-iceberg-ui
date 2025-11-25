@@ -39,15 +39,43 @@ A modern web application for managing Apache Iceberg tables via a REST Catalog.
 - **Frontend**: React (Vite)
     - **Material UI**: For a polished, responsive user interface.
 
+### Interface Overview
+
+- **Explorer**: Browse namespaces and tables. Use the dropdown to switch catalogs.
+- **Query Editor**: Write and execute SQL. Supports multiple tabs.
+- **Metadata Viewer**: Inspect Schema, Snapshots, Files, and Manifests.
+- **Dark Mode**: Toggle the theme using the sun/moon icon in the header.
+
 ## Getting Started
 
-### Prerequisites
+You can run Iceberg UI using Docker (recommended for quick start) or by setting it up locally (recommended for development).
+
+### Option 1: Docker (Quick Start)
+
+You can run the application easily using the pre-built Docker image.
+
+#### Standalone UI
+Run the UI on port 8000:
+```bash
+docker run -p 8000:8000 alexmerced/iceberg-ui
+```
+Access the UI at `http://localhost:8000`.
+
+#### Full Environment (with Nessie & Minio)
+To spin up a complete testing environment with a Nessie Catalog and Minio S3 storage, use the provided `docker-compose.yml`:
+```bash
+docker-compose up -d
+```
+
+### Option 2: Local Development
+
+#### Prerequisites
 
 - Python 3.9+
 - Node.js 16+
-- (Optional) An Iceberg catalog server - you can use the included Docker Compose setup with Nessie + MinIO
+- (Optional) An Iceberg catalog server
 
-### Backend Setup
+#### Backend Setup
 
 1. Navigate to the `backend` directory:
    ```bash
@@ -159,7 +187,18 @@ SELECT * FROM my_namespace.my_table
 FOR SYSTEM_TIME AS OF TIMESTAMP '2024-01-01 00:00:00';
 ```
 
-### Uploading Files
+### Metadata Tables
+
+You can query Iceberg metadata tables by appending `$` to the table name:
+
+- `$snapshots`: History of table states
+- `$files`: Data files in the current snapshot
+- `$manifests`: Manifest files
+- `$partitions`: Partition statistics
+
+```sql
+SELECT * FROM db.orders$snapshots;
+```
 
 ### Uploading Files
 
@@ -168,6 +207,15 @@ FOR SYSTEM_TIME AS OF TIMESTAMP '2024-01-01 00:00:00';
 3. Select a CSV, JSON, or Parquet file.
 4. If creating a new table, enter a name. The schema will be automatically inferred from the file.
 5. The data will be uploaded and the table created/updated.
+
+### Schema Evolution
+
+Iceberg supports full schema evolution. You can modify table schemas using SQL commands (if supported by your catalog):
+
+- **Add Column**: `ALTER TABLE ... ADD COLUMN`
+- **Drop Column**: `ALTER TABLE ... DROP COLUMN`
+- **Rename Column**: `ALTER TABLE ... RENAME COLUMN`
+- **Update Type**: `ALTER TABLE ... ALTER COLUMN ... TYPE`
 
 ### Exporting Results
 
@@ -181,6 +229,22 @@ After running a query:
 - **Switch Catalogs**: Use the dropdown in the explorer to switch between connected catalogs.
 - **Log Out**: Click "Log Out" in the header to disconnect from all catalogs.
 
+## Best Practices
+
+### Query Performance
+- **Filter Early**: Always use WHERE clauses on partition columns to prune data.
+- **Limit Results**: Use `LIMIT` when exploring data to avoid fetching huge datasets.
+- **Use Metadata Tables**: Check `$files` to see how many files your query might scan.
+
+### Data Maintenance
+- **Compaction**: Regularly compact small files to improve read performance.
+- **Expire Snapshots**: Remove old snapshots to free up storage space.
+
+### Catalog Management
+- **Environment Separation**: Use separate catalogs for Prod, Dev, and Staging.
+- **Configuration**: Use `env.json` to share configuration with your team (but don't commit secrets!).
+- **Naming**: Use descriptive names for your catalogs to avoid confusion in cross-catalog joins.
+
 ## Testing
 
 The project includes an End-to-End (E2E) testing suite using Playwright.
@@ -190,85 +254,7 @@ cd frontend
 npx playwright test
 ```
 
-## Docker Usage 🐳
 
-You can run the application easily using the pre-built Docker image.
-
-### Quick Start (Standalone)
-
-Run the UI on port 8000:
-
-```bash
-docker run -p 8000:8000 alexmerced/iceberg-ui
-```
-
-Access the UI at `http://localhost:8000`.
-
-### Full Environment (with Nessie & Minio)
-
-To spin up a complete testing environment with a Nessie Catalog and Minio S3 storage, use the provided `docker-compose.yml` (or create one):
-
-```yaml
-version: '3.8'
-services:
-  iceberg-ui:
-    image: alexmerced/iceberg-ui
-    ports:
-      - "8000:8000"
-    environment:
-      - AWS_ACCESS_KEY_ID=admin
-      - AWS_SECRET_ACCESS_KEY=password
-      - AWS_REGION=us-east-1
-      - S3_ENDPOINT=http://minio:9000
-      - CATALOG_URI=http://nessie:19120/api/v1
-      - CATALOG_WAREHOUSE=s3://warehouse/
-    depends_on:
-      - nessie
-      - minio
-
-  nessie:
-    image: projectnessie/nessie:latest
-    ports:
-      - "19120:19120"
-    environment:
-      - QUARKUS_HTTP_PORT=19120
-      - NESSIE_VERSION_STORE_TYPE=INMEMORY
-      - NESSIE_SERVER_DEFAULT_BRANCH=main
-      # Credential Vending
-      - NESSIE_CATALOG_DEFAULT_WAREHOUSE=s3://warehouse/
-      - NESSIE_CATALOG_ICEBERG_CONFIG_DEFAULTS_S3_ENDPOINT=http://minio:9000
-      - NESSIE_CATALOG_ICEBERG_CONFIG_DEFAULTS_S3_PATH_STYLE_ACCESS=true
-      - NESSIE_CATALOG_ICEBERG_CONFIG_DEFAULTS_S3_ACCESS_KEY_ID=admin
-      - NESSIE_CATALOG_ICEBERG_CONFIG_DEFAULTS_S3_SECRET_ACCESS_KEY=password
-      - NESSIE_CATALOG_ICEBERG_CONFIG_DEFAULTS_CLIENT_REGION=us-east-1
-
-  minio:
-    image: minio/minio:latest
-    ports:
-      - "9000:9000"
-      - "9001:9001"
-    environment:
-      - MINIO_ROOT_USER=admin
-      - MINIO_ROOT_PASSWORD=password
-    command: server /data --console-address ":9001"
-
-  createbuckets:
-    image: minio/mc
-    depends_on:
-      - minio
-    entrypoint: >
-      /bin/sh -c "
-      /usr/bin/mc alias set myminio http://minio:9000 admin password;
-      /usr/bin/mc mb myminio/warehouse;
-      /usr/bin/mc anonymous set public myminio/warehouse;
-      exit 0;
-      "
-```
-
-Run with:
-```bash
-docker-compose up -d
-```
 
 - [Hands-on Tutorial with Apache Polaris based Dremio Catalog](https://www.dremio.com/blog/hands-on-introduction-to-dremio-cloud-next-gen-self-guided-workshop/)
 - [Reference Blog on Catalog Settings when Using Nessie REST](https://www.dremio.com/blog/intro-to-pyiceberg/)
