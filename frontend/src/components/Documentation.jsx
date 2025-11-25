@@ -1,7 +1,13 @@
-import React from 'react';
-import { Box, Typography, Paper, Divider, List, ListItem, ListItemText, Chip } from '@mui/material';
+import React, { useState } from 'react';
+import { Box, Typography, Paper, Divider, List, ListItem, ListItemText, Chip, Tabs, Tab } from '@mui/material';
 
 function Documentation() {
+  const [tabIndex, setTabIndex] = useState(0);
+
+  const handleTabChange = (event, newValue) => {
+    setTabIndex(newValue);
+  };
+
   const CodeBlock = ({ children }) => (
     <Box sx={{ 
       bgcolor: 'background.paper', 
@@ -11,7 +17,8 @@ function Documentation() {
       border: '1px solid',
       borderColor: 'divider',
       my: 1,
-      overflowX: 'auto'
+      overflowX: 'auto',
+      whiteSpace: 'pre'
     }}>
       {children}
     </Box>
@@ -25,280 +32,247 @@ function Documentation() {
     </Box>
   );
 
+  const TabPanel = ({ children, value, index }) => (
+    <div role="tabpanel" hidden={value !== index} style={{ height: '100%' }}>
+      {value === index && (
+        <Box sx={{ p: 3, pb: 10, height: 'calc(100vh - 300px)', overflow: 'auto' }}>
+          {children}
+        </Box>
+      )}
+    </div>
+  );
+
   return (
     <Box sx={{ maxWidth: 1200, mx: 'auto', pb: 4 }}>
       <Typography variant="h3" gutterBottom>Documentation</Typography>
       <Typography variant="subtitle1" color="text.secondary" paragraph>
-        Learn how to use the Iceberg UI to query, manage, and analyze your Apache Iceberg tables.
+        Comprehensive guide to the Iceberg UI: querying, management, and best practices.
       </Typography>
 
-      <Section title="🎉 What's New">
-        <Typography paragraph>
-          <strong>Multi-Catalog Support:</strong> Connect to multiple catalogs simultaneously and switch between them using the dropdown selector.
-        </Typography>
-        <Typography paragraph>
-          <strong>Cross-Catalog Joins:</strong> Query and join tables from different catalogs in a single SQL statement.
-        </Typography>
-        <Typography paragraph>
-          <strong>DML Operations:</strong> Execute INSERT and DELETE statements directly on your Iceberg tables.
-        </Typography>
-        <Typography paragraph>
-          <strong>File Uploads:</strong> Upload CSV, JSON, and Parquet files to append data to existing tables or create new ones.
-        </Typography>
-        <Typography paragraph>
-          <strong>Quick Query:</strong> Use the "Play" button next to any table to instantly populate a query.
-        </Typography>
-      </Section>
+      <Paper sx={{ mb: 3 }}>
+        <Tabs value={tabIndex} onChange={handleTabChange} indicatorColor="primary" textColor="primary" variant="scrollable" scrollButtons="auto">
+          <Tab label="Getting Started" />
+          <Tab label="Querying" />
+          <Tab label="Data Management" />
+          <Tab label="Best Practices" />
+        </Tabs>
+      </Paper>
 
-      <Section title="Multi-Catalog Management">
-        <Typography paragraph>
-          Connect to multiple Iceberg catalogs and manage them from a single interface.
-        </Typography>
-        
-        <Typography variant="subtitle2">Connecting to a Catalog</Typography>
-        <Typography paragraph>
-          1. Click the "Connect" button<br/>
-          2. Enter a friendly name for your catalog (e.g., "production", "staging")<br/>
-          3. Select the catalog type (REST, Hive, Glue, etc.)<br/>
-          4. Provide connection details (URI, warehouse, credentials)<br/>
-          5. Click "Connect"
-        </Typography>
+      {/* TAB 1: GETTING STARTED */}
+      <TabPanel value={tabIndex} index={0}>
+        <Section title="Connecting to Catalogs">
+          <Typography paragraph>
+            You can connect to multiple Iceberg catalogs simultaneously.
+          </Typography>
+          <Typography variant="subtitle2">Manual Connection</Typography>
+          <List dense>
+            <ListItem><ListItemText primary="1. Click 'Connect' in the header." /></ListItem>
+            <ListItem><ListItemText primary="2. Choose a friendly name (e.g., 'prod', 'dev')." /></ListItem>
+            <ListItem><ListItemText primary="3. Select type (REST, Hive, Glue, etc.)." /></ListItem>
+            <ListItem><ListItemText primary="4. Enter URI and credentials." /></ListItem>
+          </List>
 
-        <Typography variant="subtitle2">Auto-Connect via env.json</Typography>
-        <Typography paragraph>
-          You can pre-configure catalogs in <code>env.json</code> in the backend directory.
-        </Typography>
-        <CodeBlock>
+          <Typography variant="subtitle2">Auto-Connect (env.json)</Typography>
+          <Typography paragraph>Pre-configure catalogs in <code>backend/env.json</code>:</Typography>
+          <CodeBlock>
 {`{
   "catalogs": {
-    "prod": { "uri": "...", "type": "rest" },
-    "dev": { "uri": "...", "type": "rest" }
+    "prod": {
+      "type": "rest",
+      "uri": "https://api.tabular.io/ws",
+      "credential": "client:secret",
+      "warehouse": "s3://my-bucket/warehouse"
+    },
+    "local": {
+      "type": "rest",
+      "uri": "http://localhost:8181"
+    }
   }
 }`}
-        </CodeBlock>
+          </CodeBlock>
+        </Section>
 
-        <Typography variant="subtitle2">Switching Between Catalogs</Typography>
-        <Typography paragraph>
-          Use the dropdown selector in the Explorer sidebar to switch between connected catalogs. Each catalog maintains its own namespaces and tables.
-        </Typography>
+        <Section title="Interface Overview">
+          <Typography paragraph>
+            <strong>Explorer:</strong> Browse namespaces and tables. Use the dropdown to switch catalogs.
+          </Typography>
+          <Typography paragraph>
+            <strong>Query Editor:</strong> Write and execute SQL. Supports multiple tabs.
+          </Typography>
+          <Typography paragraph>
+            <strong>Metadata Viewer:</strong> Inspect Schema, Snapshots, Files, and Manifests.
+          </Typography>
+          <Typography paragraph>
+            <strong>Dark Mode:</strong> Toggle the theme using the sun/moon icon in the header.
+          </Typography>
+        </Section>
+      </TabPanel>
 
-        <Typography variant="subtitle2">Logging Out</Typography>
-        <Typography paragraph>
-          Click "Log Out" in the header to disconnect from all catalogs and return to the connection screen.
-        </Typography>
-      </Section>
+      {/* TAB 2: QUERYING */}
+      <TabPanel value={tabIndex} index={1}>
+        <Section title="SQL Syntax">
+          <Typography paragraph>
+            The UI uses DataFusion for query execution. Standard SQL is supported.
+          </Typography>
+          <CodeBlock>
+{`-- Basic Select
+SELECT * FROM db.customers LIMIT 10;
 
-      <Section title="Querying Tables">
-        <Typography paragraph>
-          The Query Editor supports standard SQL syntax via DataFusion. You can query tables using their namespace-qualified names.
-        </Typography>
-        <CodeBlock>
-          SELECT * FROM db.customers LIMIT 10;
-        </CodeBlock>
-        <Typography paragraph>
-            <strong>Tip:</strong> Click the "Play" button (▶️) next to a table in the Explorer to automatically generate this query.
-        </Typography>
-        <CodeBlock>
-          SELECT id, name, email FROM db.customers WHERE region = 'US';
-        </CodeBlock>
-        
-        <Typography variant="h6" sx={{ mt: 2 }}>Supported Features</Typography>
-        <List>
-          <ListItem>
-            <ListItemText primary="Predicate Pushdown" secondary="WHERE clauses are pushed down to Iceberg to minimize data scanning." />
-          </ListItem>
-          <ListItem>
-            <ListItemText primary="Column Projection" secondary="Only requested columns are read from storage." />
-          </ListItem>
-          <ListItem>
-            <ListItemText primary="Query Caching" secondary="Results are cached automatically for improved performance." />
-          </ListItem>
-        </List>
-      </Section>
+-- Filtering
+SELECT name, email FROM db.customers 
+WHERE region = 'US' AND active = true;
 
-      <Section title="Cross-Catalog Joins">
-        <Typography paragraph>
-          Query and join tables from different catalogs in a single SQL statement. Use fully qualified names with the catalog prefix.
-        </Typography>
-        
-        <Typography variant="subtitle2">Syntax</Typography>
-        <CodeBlock>
-          SELECT u.name, o.amount{'\n'}
-          FROM catalog1.db.users u{'\n'}
-          JOIN catalog2.db.orders o ON u.id = o.user_id;
-        </CodeBlock>
+-- Aggregation
+SELECT region, COUNT(*) as count 
+FROM db.customers 
+GROUP BY region 
+HAVING count > 100;`}
+          </CodeBlock>
+        </Section>
 
-        <Typography variant="subtitle2">Example: Production + Staging</Typography>
-        <CodeBlock>
-          SELECT prod.id, prod.name, stg.test_results{'\n'}
-          FROM production.analytics.customers prod{'\n'}
-          LEFT JOIN staging.analytics.test_data stg ON prod.id = stg.customer_id;
-        </CodeBlock>
+        <Section title="Cross-Catalog Joins">
+          <Typography paragraph>
+            Join tables across different catalogs using fully qualified names: <code>catalog.namespace.table</code>.
+          </Typography>
+          <CodeBlock>
+{`SELECT 
+  prod.user_id, 
+  prod.name, 
+  stg.experiment_group
+FROM 
+  production.users.profiles prod
+JOIN 
+  staging.experiments.assignments stg 
+ON 
+  prod.user_id = stg.user_id;`}
+          </CodeBlock>
+          <Chip label="Requirement" color="warning" size="small" sx={{ mr: 1 }} />
+          <Typography variant="caption">Both catalogs must be connected.</Typography>
+        </Section>
 
-        <Chip label="Tip" color="info" size="small" sx={{ mr: 1 }} />
-        <Typography variant="caption">
-          Make sure both catalogs are connected before running cross-catalog queries.
-        </Typography>
-      </Section>
+        <Section title="Time Travel">
+          <Typography paragraph>Query historical data using snapshots or timestamps.</Typography>
+          <CodeBlock>
+{`-- By Snapshot ID
+SELECT * FROM db.orders FOR SYSTEM_TIME AS OF SNAPSHOT 123456789;
 
-      <Section title="DML Operations">
-        <Typography paragraph>
-          Execute data manipulation operations directly on your Iceberg tables.
-        </Typography>
+-- By Timestamp
+SELECT * FROM db.orders FOR SYSTEM_TIME AS OF TIMESTAMP '2024-01-01 00:00:00';`}
+          </CodeBlock>
+        </Section>
 
-        <Typography variant="subtitle2">INSERT - Values</Typography>
-        <CodeBlock>
-          INSERT INTO db.customers VALUES{'\n'}
-            (1, 'Alice', 'alice@example.com'),{'\n'}
-            (2, 'Bob', 'bob@example.com');
-        </CodeBlock>
+        <Section title="Metadata Tables">
+          <Typography paragraph>Append <code>$table_name</code> to query metadata.</Typography>
+          <List dense>
+            <ListItem><ListItemText primary="$snapshots" secondary="History of table states" /></ListItem>
+            <ListItem><ListItemText primary="$files" secondary="Data files in the current snapshot" /></ListItem>
+            <ListItem><ListItemText primary="$manifests" secondary="Manifest files" /></ListItem>
+            <ListItem><ListItemText primary="$partitions" secondary="Partition statistics" /></ListItem>
+          </List>
+          <CodeBlock>SELECT * FROM db.orders$snapshots;</CodeBlock>
+        </Section>
+      </TabPanel>
 
-        <Typography variant="subtitle2">INSERT - From SELECT</Typography>
-        <CodeBlock>
-          INSERT INTO db.us_customers{'\n'}
-          SELECT * FROM db.customers WHERE region = 'US';
-        </CodeBlock>
+      {/* TAB 3: DATA MANAGEMENT */}
+      <TabPanel value={tabIndex} index={2}>
+        <Section title="File Uploads">
+          <Typography paragraph>
+            Upload CSV, JSON, or Parquet files.
+          </Typography>
+          
+          <Typography variant="subtitle2">1. Create New Table</Typography>
+          <Typography paragraph>
+            Click the upload icon on a <strong>Namespace</strong>.
+            <br/>- Schema is inferred from the file.
+            <br/>- Table is created automatically.
+          </Typography>
 
-        <Typography variant="subtitle2">DELETE</Typography>
-        <CodeBlock>
-          DELETE FROM db.customers WHERE created_at {'<'} '2023-01-01';
-        </CodeBlock>
+          <Typography variant="subtitle2">2. Append to Existing Table</Typography>
+          <Typography paragraph>
+            Click the upload icon on a <strong>Table</strong>.
+            <br/>- Data is appended to the existing table.
+            <br/>- Schema must match (or be compatible).
+          </Typography>
+        </Section>
 
-        <Chip label="Note" color="warning" size="small" sx={{ mr: 1 }} />
-        <Typography variant="caption">
-          DML operations are atomic and create new table snapshots. You can use time travel to view previous states.
-        </Typography>
-      </Section>
+        <Section title="DML Operations">
+          <Typography paragraph>
+            Modify data using INSERT and DELETE.
+          </Typography>
+          <CodeBlock>
+{`-- Insert Values
+INSERT INTO db.logs VALUES (1, 'Error', NOW());
 
-      <Section title="File Uploads">
-        <Typography paragraph>
-          Upload CSV, JSON, or Parquet files to append data to your Iceberg tables.
-        </Typography>
+-- Insert from Select (CTAS pattern)
+INSERT INTO db.archive_logs 
+SELECT * FROM db.logs WHERE level = 'Error';
 
-        <Typography variant="subtitle2">How to Upload</Typography>
-        <Typography paragraph>
-          1. <strong>Append:</strong> Navigate to a table and click the cloud upload icon.<br/>
-          2. <strong>Create:</strong> Navigate to a namespace and click the cloud upload icon.<br/>
-          3. Select your file (CSV, JSON, or Parquet).<br/>
-          4. If creating a new table, enter the desired table name. The schema is inferred automatically.<br/>
-          5. Click "Upload".
-        </Typography>
+-- Delete
+DELETE FROM db.logs WHERE created_at < DATE('2023-01-01');`}
+          </CodeBlock>
+        </Section>
 
-        <Typography variant="subtitle2">Supported Formats</Typography>
-        <List>
-          <ListItem>
-            <ListItemText primary="CSV" secondary="Comma-separated values with header row" />
-          </ListItem>
-          <ListItem>
-            <ListItemText primary="JSON" secondary="JSON array or newline-delimited JSON" />
-          </ListItem>
-          <ListItem>
-            <ListItemText primary="Parquet" secondary="Apache Parquet columnar format" />
-          </ListItem>
-        </List>
+        <Section title="Schema Evolution">
+          <Typography paragraph>
+            Iceberg supports full schema evolution.
+          </Typography>
+          <List>
+            <ListItem><ListItemText primary="Add Column" secondary="ALTER TABLE ... ADD COLUMN" /></ListItem>
+            <ListItem><ListItemText primary="Drop Column" secondary="ALTER TABLE ... DROP COLUMN" /></ListItem>
+            <ListItem><ListItemText primary="Rename Column" secondary="ALTER TABLE ... RENAME COLUMN" /></ListItem>
+            <ListItem><ListItemText primary="Update Type" secondary="ALTER TABLE ... ALTER COLUMN ... TYPE" /></ListItem>
+          </List>
+          <Typography variant="caption" color="text.secondary">
+            * Note: Schema evolution commands are supported via SQL if the backend catalog supports them.
+          </Typography>
+        </Section>
+      </TabPanel>
 
-        <Chip label="Tip" color="info" size="small" sx={{ mr: 1 }} />
-        <Typography variant="caption">
-          The file schema must match the table schema. Data is appended atomically.
-        </Typography>
-      </Section>
+      {/* TAB 4: BEST PRACTICES */}
+      <TabPanel value={tabIndex} index={3}>
+        <Section title="Query Performance">
+          <Typography paragraph>
+            <strong>1. Filter Early:</strong> Always use WHERE clauses on partition columns to prune data.
+          </Typography>
+          <CodeBlock>
+{`-- Good (Prunes partitions)
+SELECT * FROM logs WHERE date = '2024-01-01';
 
-      <Section title="Time Travel">
-        <Typography paragraph>
-          Query historical data using Iceberg's time travel features. You can query by Snapshot ID or Timestamp.
-        </Typography>
-        
-        <Typography variant="subtitle2">By Snapshot ID</Typography>
-        <CodeBlock>
-          SELECT * FROM db.orders FOR SYSTEM_TIME AS OF SNAPSHOT 123456789;
-        </CodeBlock>
+-- Bad (Scans all files)
+SELECT * FROM logs;`}
+          </CodeBlock>
+          
+          <Typography paragraph>
+            <strong>2. Limit Results:</strong> Use <code>LIMIT</code> when exploring data to avoid fetching huge datasets.
+          </Typography>
 
-        <Typography variant="subtitle2">By Timestamp</Typography>
-        <CodeBlock>
-          SELECT * FROM db.orders{'\n'}
-          FOR SYSTEM_TIME AS OF TIMESTAMP '2024-01-01 00:00:00';
-        </CodeBlock>
-        
-        <Chip label="Tip" color="info" size="small" sx={{ mr: 1 }} />
-        <Typography variant="caption">
-          Check the "Snapshots" tab in the Metadata Viewer to find Snapshot IDs and Timestamps.
-        </Typography>
-      </Section>
+          <Typography paragraph>
+            <strong>3. Use Metadata Tables:</strong> Check <code>$files</code> to see how many files your query might scan.
+          </Typography>
+        </Section>
 
-      <Section title="Metadata Tables">
-        <Typography paragraph>
-          Inspect table internals by querying metadata tables. Append the metadata type to the table name with a <code>$</code>.
-        </Typography>
+        <Section title="Data Maintenance">
+          <Typography paragraph>
+            <strong>Compaction:</strong> Regularly compact small files to improve read performance.
+          </Typography>
+          <Typography paragraph>
+            <strong>Expire Snapshots:</strong> Remove old snapshots to free up storage space.
+          </Typography>
+          <CodeBlock>
+{`-- Example Maintenance Procedure (Conceptual)
+CALL system.rewrite_data_files(table => 'db.logs');
+CALL system.expire_snapshots(table => 'db.logs', older_than => ...);`}
+          </CodeBlock>
+        </Section>
 
-        <Typography variant="subtitle2">Snapshots</Typography>
-        <CodeBlock>
-          SELECT * FROM db.orders$snapshots;
-        </CodeBlock>
-
-        <Typography variant="subtitle2">Files</Typography>
-        <CodeBlock>
-          SELECT * FROM db.orders$files;
-        </CodeBlock>
-
-        <Typography variant="subtitle2">Statistics</Typography>
-        <CodeBlock>
-          SELECT * FROM db.orders$stats;
-        </CodeBlock>
-
-        <Typography variant="subtitle2">Partitions</Typography>
-        <CodeBlock>
-          SELECT * FROM db.orders$partitions;
-        </CodeBlock>
-      </Section>
-
-      <Section title="Creating Tables">
-        <Typography paragraph>
-          You can create new tables from query results (CTAS - Create Table As Select).
-        </Typography>
-        <CodeBlock>
-          CREATE TABLE db.us_customers AS{'\n'}
-          SELECT * FROM db.customers WHERE region = 'US';
-        </CodeBlock>
-
-        <Typography variant="subtitle2">With Explicit Schema</Typography>
-        <CodeBlock>
-          CREATE TABLE db.new_table (id LONG, name STRING, amount DOUBLE);
-        </CodeBlock>
-      </Section>
-
-      <Section title="Exporting Results">
-        <Typography paragraph>
-          Export query results to CSV, JSON, or Parquet format for further analysis.
-        </Typography>
-
-        <Typography variant="subtitle2">How to Export</Typography>
-        <Typography paragraph>
-          1. Run your query in the Query Editor<br/>
-          2. Click the "Export" button<br/>
-          3. Select your desired format (CSV, JSON, or Parquet)<br/>
-          4. The file will be downloaded to your browser
-        </Typography>
-      </Section>
-
-      <Section title="Namespaces">
-        <Typography paragraph>
-          Tables are organized into namespaces. Always use the fully qualified name <code>namespace.table</code> in your queries.
-        </Typography>
-        <Typography paragraph>
-          For cross-catalog queries, use <code>catalog.namespace.table</code>.
-        </Typography>
-        <Typography paragraph>
-          You can create new namespaces using the "NS" button in the Explorer sidebar.
-        </Typography>
-      </Section>
-
-      <Section title="Keyboard Shortcuts">
-        <Typography paragraph>
-          <strong>Ctrl/Cmd + Enter:</strong> Execute query<br/>
-          <strong>Ctrl/Cmd + S:</strong> Save query (if implemented)<br/>
-          <strong>Esc:</strong> Clear selection
-        </Typography>
-      </Section>
+        <Section title="Catalog Management">
+          <Typography paragraph>
+            - Use separate catalogs for Prod/Dev/Staging.
+            - Use <code>env.json</code> to share configuration with your team (but don't commit secrets!).
+            - Use descriptive names for your catalogs to avoid confusion in cross-catalog joins.
+          </Typography>
+        </Section>
+      </TabPanel>
     </Box>
   );
 }
