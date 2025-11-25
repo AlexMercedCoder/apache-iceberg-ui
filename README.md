@@ -115,12 +115,14 @@ Copy `example.env.json` to `env.json` and update it with your catalog details. T
 
 ```json
 {
-  "catalog": {
-    "uri": "https://catalog.example.com/api/iceberg",
-    "oauth2-server-uri": "https://auth.example.com/oauth/token",
-    "token": "your-token-here",
-    "warehouse": "s3://your-warehouse",
-    "type": "rest"
+  "catalogs": {
+    "default": {
+      "uri": "https://catalog.example.com/api/iceberg",
+      "oauth2-server-uri": "https://auth.example.com/oauth/token",
+      "token": "your-token-here",
+      "warehouse": "s3://your-warehouse",
+      "type": "rest"
+    }
   }
 }
 ```
