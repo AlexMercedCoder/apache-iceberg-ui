@@ -17,9 +17,15 @@ from query_engine import QueryEngine
 app = FastAPI()
 
 # Allow CORS
+# Allow CORS
+origins = ["*"]
+frontend_url = os.environ.get("FRONTEND_URL")
+if frontend_url:
+    origins = frontend_url.split(",")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, specify the frontend URL
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -362,3 +368,9 @@ async def serve_spa(full_path: str):
     else:
         print(f"DEBUG: static_dir not found at {static_dir}")
     return {"message": "API is running. Static files not found (dev mode)."}
+
+if __name__ == "__main__":
+    import uvicorn
+    # Check BACKEND_PORT, then PORT, then default 8000
+    port = int(os.environ.get("BACKEND_PORT", os.environ.get("PORT", 8000)))
+    uvicorn.run(app, host="0.0.0.0", port=port)

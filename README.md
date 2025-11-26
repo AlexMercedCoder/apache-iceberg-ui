@@ -107,6 +107,28 @@ docker-compose up -d
    npm run dev
    ```
 
+   **Note**: You can configure the port using the `PORT` environment variable:
+   ```bash
+   PORT=3000 npm run dev
+   ```
+
+   For the backend, you can also set the port:
+   ```bash
+   PORT=8001 python main.py
+   ```
+
+### Environment Variables
+
+You can configure the application using the following environment variables:
+
+#### Frontend
+- `PORT` or `FRONTEND_PORT`: Port to run the frontend server (default: 5173).
+- `VITE_BACKEND_URL`: URL of the backend API (default: `http://localhost:8000`).
+
+#### Backend
+- `PORT` or `BACKEND_PORT`: Port to run the backend server (default: 8000).
+- `FRONTEND_URL`: Comma-separated list of allowed frontend URLs for CORS (default: `*`).
+
 ### Configuration
 
 #### Option 1: Using env.json (Auto-connect on startup)
@@ -154,6 +176,7 @@ You can also connect to catalogs directly through the UI without pre-configuring
    - **Catalog Type**: REST, Hive, Glue, etc.
    - **URI**: The catalog endpoint URL
    - **Warehouse**: The warehouse location (S3, HDFS, etc.)
+   - **Authentication**: Choose "OAuth2", "Bearer Token", or "None" (for no-auth catalogs)
    - **Credentials**: Authentication details if required
 
 3. You can connect to multiple catalogs and switch between them using the catalog selector.

@@ -19,9 +19,11 @@ function ConnectionForm({ onConnect }) {
 
     if (authType === 'credential') {
       connectionProperties.credential = credential;
-    } else {
+    } else if (authType === 'token') {
       connectionProperties.token = token;
     }
+    // If authType is 'none', we don't add credential or token
+
 
     try {
       if (additionalJson) {
@@ -66,10 +68,11 @@ function ConnectionForm({ onConnect }) {
             <RadioGroup row value={authType} onChange={(e) => setAuthType(e.target.value)}>
               <FormControlLabel value="credential" control={<Radio />} label="OAuth2 (Client:Secret)" />
               <FormControlLabel value="token" control={<Radio />} label="Bearer Token" />
+              <FormControlLabel value="none" control={<Radio />} label="None (No Auth)" />
             </RadioGroup>
           </FormControl>
 
-          {authType === 'credential' ? (
+          {authType === 'credential' && (
             <TextField
               fullWidth
               label="Credential (client-id:client-secret)"
@@ -78,7 +81,9 @@ function ConnectionForm({ onConnect }) {
               margin="normal"
               helperText="For OAuth2 Client Credentials flow"
             />
-          ) : (
+          )}
+
+          {authType === 'token' && (
             <TextField
               fullWidth
               label="Access Token"
